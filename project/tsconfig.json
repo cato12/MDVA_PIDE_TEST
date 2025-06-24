@@ -1,0 +1,10 @@
+{
+  // tsconfig.json
+  // Configuración raíz de TypeScript para el proyecto.
+  // Define referencias a configuraciones específicas de la app y del entorno Node.
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}

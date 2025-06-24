@@ -1,0 +1,10 @@
+/*
+  index.css
+  Archivo principal de estilos globales para la aplicación React.
+  Utiliza Tailwind CSS para la generación de utilidades y componentes personalizados.
+  No agregar reglas CSS aquí; usar solo para importar Tailwind y utilidades globales.
+*/
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
