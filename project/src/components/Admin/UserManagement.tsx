@@ -731,15 +731,13 @@ export function UserManagement() {
                         return;
                       }
                       const userPayload = {
-                        nombre,
+                        nombres: nombre, // Cambiado de 'nombre' a 'nombres'
                         apellidos,
                         email,
                         telefono,
                         dni,
                         cargo_id: selectedCargoId,
-                        area_id: selectedAreaId,
                         rol_id: selectedRolId,
-                        estado: 'activo',
                         password: passwordValue
                       };
                       try {
