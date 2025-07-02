@@ -22,10 +22,9 @@ app.post('/login', async (req, res) => {
   }
   try {
     const result = await pool.query(
-      `SELECT u.*, c.nombre AS cargo_nombre, a.nombre AS area_nombre, LOWER(r.nombre) AS rol
+      `SELECT u.*, c.nombre AS cargo_nombre, LOWER(r.nombre) AS rol
        FROM users u
        LEFT JOIN cargos c ON u.cargo_id = c.id
-       LEFT JOIN areas a ON c.area_id = a.id
        LEFT JOIN roles r ON u.rol_id = r.id
        WHERE (u.email = $1 OR u.dni = $1) AND u.password = $2`,
       [emailOrDni, password]
@@ -37,6 +36,7 @@ app.post('/login', async (req, res) => {
       res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
     }
   } catch (err) {
+    console.error('Error en /login:', err);
     res.status(500).json({ error: 'Error en el servidor' });
   }
 });
