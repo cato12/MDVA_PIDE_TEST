@@ -14,7 +14,40 @@
  *
  * @module UserManagement
  */
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+// Utilidades para obtener áreas y roles desde el backend
+const fetchAreas = async () => {
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/areas`);
+    if (!res.ok) throw new Error('Error al obtener áreas');
+    return await res.json();
+  } catch {
+    return [];
+  }
+};
+
+const fetchRoles = async () => {
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/roles`);
+    if (!res.ok) throw new Error('Error al obtener roles');
+    return await res.json();
+  } catch {
+    return [];
+  }
+};
+
+// Utilidad para obtener cargos desde el backend, opcionalmente por área
+const fetchCargos = async (areaId?: string) => {
+  try {
+    let url = `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/cargos`;
+    if (areaId) url += `?area_id=${areaId}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Error al obtener cargos');
+    return await res.json();
+  } catch {
+    return [];
+  }
+};
 import {
   Users, Search, Filter, Plus, Edit, Trash2, AlertTriangle, Shield, ShieldCheck, Eye, EyeOff, UserCheck, UserX, Mail, Phone, Calendar, Building, LogIn
 } from 'lucide-react';
@@ -123,6 +156,66 @@ export function UserManagement() {
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState(selectedUser?.password || '');
+  // Estados para áreas, roles y cargos
+  const [areas, setAreas] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
+  const [cargos, setCargos] = useState<{ id: number; nombre: string }[]>([]);
+  const [selectedAreaId, setSelectedAreaId] = useState<string>('');
+  const [selectedCargoId, setSelectedCargoId] = useState<string>('');
+  const [selectedRolId, setSelectedRolId] = useState<string>('');
+  // Referencia al formulario para obtener valores de manera segura
+  const formRef = useRef<HTMLFormElement | null>(null);
+  // Cargar áreas, roles y cargos al abrir el modal de usuario
+  useEffect(() => {
+    if (showUserModal) {
+      fetchAreas().then(data => {
+        setAreas(data);
+        // Si hay un usuario seleccionado, buscar cargos de su área
+        if (selectedUser && data.length) {
+          const areaObj = data.find((a: any) => a.nombre === selectedUser.area);
+          if (areaObj) {
+            setSelectedAreaId(areaObj.id);
+            fetchCargos(areaObj.id).then(cgs => {
+              setCargos(cgs);
+              // Buscar el cargo por nombre y setear el id
+              const cargoObj = cgs.find((c: any) => c.nombre === selectedUser.cargo);
+              if (cargoObj) setSelectedCargoId(cargoObj.id);
+            });
+          } else {
+            setCargos([]);
+          }
+        } else {
+          setCargos([]);
+        }
+      });
+      fetchRoles().then(data => {
+        setRoles(data);
+        if (selectedUser && data.length) {
+          const rolObj = data.find((r: any) => r.nombre.toLowerCase() === selectedUser.role);
+          if (rolObj) setSelectedRolId(rolObj.id);
+        }
+      });
+      if (!selectedUser) {
+        setSelectedAreaId('');
+        setSelectedCargoId('');
+        setSelectedRolId('');
+      }
+    }
+  }, [showUserModal]);
+
+  // Al abrir el modal de usuario, cargar los cargos desde la base de datos
+  useEffect(() => {
+    if (showUserModal) {
+      fetchCargos().then((data) => {
+        // Asegurarse de que los datos sean del tipo correcto
+        if (Array.isArray(data)) {
+          setCargos(data.filter((c) => c && c.id && c.nombre));
+        } else {
+          setCargos([]);
+        }
+      });
+    }
+  }, [showUserModal]);
   const { addToast } = useToast();
   const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -223,10 +316,15 @@ export function UserManagement() {
       setSelectedUser(user);
       setPassword(user.password || '');
       setIsEditing(true);
+      // Buscar el área y cargo seleccionados
+      setSelectedAreaId('');
+      setSelectedCargoId(user.cargo || '');
     } else {
       setSelectedUser(null);
       setPassword('');
       setIsEditing(false);
+      setSelectedAreaId('');
+      setSelectedCargoId('');
     }
     setShowUserModal(true);
   };
@@ -486,13 +584,14 @@ export function UserManagement() {
                 ×
               </button>
             </div>
-            <form className="px-6 py-6">
+                <form className="px-6 py-6" ref={formRef}>
               {/* Datos personales y laborales agrupados en dos columnas en md+ */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Nombres</label>
                   <input
                     type="text"
+                    name="nombre"
                     defaultValue={selectedUser?.nombre || ''}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
                     placeholder="Nombres"
@@ -503,6 +602,7 @@ export function UserManagement() {
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Apellidos</label>
                   <input
                     type="text"
+                    name="apellidos"
                     defaultValue={selectedUser?.apellidos || ''}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
                     placeholder="Apellidos"
@@ -513,6 +613,7 @@ export function UserManagement() {
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">DNI</label>
                   <input
                     type="text"
+                    name="dni"
                     defaultValue={selectedUser?.dni || ''}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
                     placeholder="DNI"
@@ -523,6 +624,7 @@ export function UserManagement() {
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Email</label>
                   <input
                     type="email"
+                    name="email"
                     defaultValue={selectedUser?.email || ''}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
                     placeholder="Email"
@@ -533,6 +635,7 @@ export function UserManagement() {
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Teléfono</label>
                   <input
                     type="tel"
+                    name="telefono"
                     defaultValue={selectedUser?.telefono || ''}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
                     placeholder="Teléfono"
@@ -544,6 +647,7 @@ export function UserManagement() {
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
+                      name="password"
                       className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 pr-8 transition"
                       placeholder="Contraseña"
                       aria-label="Contraseña"
@@ -563,62 +667,104 @@ export function UserManagement() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Cargo</label>
-                  <input
-                    type="text"
-                    defaultValue={selectedUser?.cargo || ''}
-                    className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
-                    placeholder="Cargo"
-                    aria-label="Cargo"
-                  />
-                </div>
-                <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Área</label>
                   <select
-                    defaultValue={selectedUser?.area || ''}
+                    value={selectedAreaId}
+                    onChange={e => setSelectedAreaId(e.target.value)}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white py-1.5 px-0 transition"
                     aria-label="Área"
                   >
                     <option value="">Seleccionar área</option>
-                    <option value="Recursos Humanos">Recursos Humanos</option>
-                    <option value="Contabilidad">Contabilidad</option>
-                    <option value="Obras Públicas">Obras Públicas</option>
-                    <option value="Servicios Públicos">Servicios Públicos</option>
-                    <option value="Sistemas">Sistemas</option>
-                    <option value="Secretaría General">Secretaría General</option>
-                    <option value="Tesorería">Tesorería</option>
+                    {areas.map((area: any) => (
+                      <option key={area.id} value={area.id}>{area.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Cargo</label>
+                  <select
+                    value={selectedCargoId}
+                    onChange={e => setSelectedCargoId(e.target.value)}
+                    className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white py-1.5 px-0 transition"
+                    aria-label="Cargo"
+                  >
+                    <option value="">Seleccionar cargo</option>
+                    {cargos.length > 0 ? (
+                      cargos.map((cargo) => (
+                        <option key={cargo.id} value={cargo.id}>{cargo.nombre}</option>
+                      ))
+                    ) : (
+                      <option value="" disabled>No hay cargos disponibles</option>
+                    )}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Rol</label>
                   <select
-                    defaultValue={selectedUser?.role || 'trabajador'}
+                    value={selectedRolId}
+                    onChange={e => setSelectedRolId(e.target.value)}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white py-1.5 px-0 transition"
                     aria-label="Rol"
                   >
-                    <option value="trabajador">Trabajador</option>
-                    <option value="jefe_area">Jefe de Área</option>
-                    <option value="administrador">Administrador</option>
+                    <option value="">Seleccionar rol</option>
+                    {roles.map((rol: any) => (
+                      <option key={rol.id} value={rol.id}>{rol.nombre}</option>
+                    ))}
                   </select>
                 </div>
               </div>
-              <div className="flex justify-center mt-4">
-                <button
-                  type="submit"
-                  onClick={e => {
-                    e.preventDefault();
-                    addToast(
-                      isEditing ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente',
-                      'success'
-                    );
-                    setShowUserModal(false);
-                  }}
-                  className="px-6 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold text-base transition focus:outline-none focus:ring-2 focus:ring-[#C01702] flex items-center gap-2 shadow-none"
-                >
-                  <UserCheck className="h-5 w-5 text-white" />
-                  {isEditing ? 'Actualizar' : 'Crear'} Usuario
-                </button>
-              </div>
+                <div className="flex justify-center mt-4">
+                  <button
+                    type="submit"
+                    onClick={async e => {
+                      e.preventDefault();
+                      if (!formRef.current) return;
+                      const formData = new FormData(formRef.current);
+                      const nombre = (formData.get('nombre') || '').toString().trim();
+                      const apellidos = (formData.get('apellidos') || '').toString().trim();
+                      const dni = (formData.get('dni') || '').toString().trim();
+                      const email = (formData.get('email') || '').toString().trim();
+                      const telefono = (formData.get('telefono') || '').toString().trim();
+                      const passwordValue = password;
+                      if (!nombre || !apellidos || !dni || !email || !telefono || !passwordValue || !selectedAreaId || !selectedCargoId || !selectedRolId) {
+                        addToast('Completa todos los campos obligatorios', 'error');
+                        return;
+                      }
+                      const userPayload = {
+                        nombre,
+                        apellidos,
+                        email,
+                        telefono,
+                        dni,
+                        cargo_id: selectedCargoId,
+                        area_id: selectedAreaId,
+                        rol_id: selectedRolId,
+                        estado: 'activo',
+                        password: passwordValue
+                      };
+                      try {
+                        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(userPayload)
+                        });
+                        if (res.ok) {
+                          addToast('Usuario creado correctamente', 'success');
+                          setShowUserModal(false);
+                        } else {
+                          const data = await res.json();
+                          addToast(data.error || 'Error al crear usuario', 'error');
+                        }
+                      } catch {
+                        addToast('Error de red al crear usuario', 'error');
+                      }
+                    }}
+                    className="px-6 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold text-base transition focus:outline-none focus:ring-2 focus:ring-[#C01702] flex items-center gap-2 shadow-none"
+                  >
+                    <UserCheck className="h-5 w-5 text-white" />
+                    {isEditing ? 'Actualizar' : 'Crear'} Usuario
+                  </button>
+                </div>
             </form>
           </div>
         </div>

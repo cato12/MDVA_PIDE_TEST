@@ -54,34 +54,38 @@ function AppRoutes() {
       {/* Rutas para Trabajadores */}
       <Route path="/dashboard" element={
         <ProtectedRoute>
-          {user?.role === 'administrador' ? <Navigate to="/admin/dashboard" /> : <TrabajadorDashboard />}
+          {user?.rol === 'administrador' ? <Navigate to="/admin/dashboard" /> : <TrabajadorDashboard />}
         </ProtectedRoute>
       } />
-      <Route path="/busqueda-ruc" element={
-        <ProtectedRoute>
-          {user?.role === 'administrador' ? <Navigate to="/admin/dashboard" /> : <RucSearch />}
-        </ProtectedRoute>
-      } />
-      <Route path="/busqueda-dni" element={
-        <ProtectedRoute>
-          {user?.role === 'administrador' ? <Navigate to="/admin/dashboard" /> : <DniSearch />}
-        </ProtectedRoute>
-      } />
+      {user?.rol !== 'administrador' && (
+        <Route path="/busqueda-ruc" element={
+          <ProtectedRoute>
+            <RucSearch />
+          </ProtectedRoute>
+        } />
+      )}
+      {user?.rol !== 'administrador' && (
+        <Route path="/busqueda-dni" element={
+          <ProtectedRoute>
+            <DniSearch />
+          </ProtectedRoute>
+        } />
+      )}
 
       {/* Rutas para Administradores */}
       <Route path="/admin/dashboard" element={
         <ProtectedRoute>
-          {user?.role === 'administrador' ? <AdminDashboard /> : <Navigate to="/dashboard" />}
+          {user?.rol === 'administrador' ? <AdminDashboard /> : <Navigate to="/dashboard" />}
         </ProtectedRoute>
       } />
       <Route path="/admin/usuarios" element={
         <ProtectedRoute>
-          {user?.role === 'administrador' ? <UserManagement /> : <Navigate to="/dashboard" />}
+          {user?.rol === 'administrador' ? <UserManagement /> : <Navigate to="/dashboard" />}
         </ProtectedRoute>
       } />
       <Route path="/admin/logs" element={
         <ProtectedRoute>
-          {user?.role === 'administrador' ? <AuditLogs /> : <Navigate to="/dashboard" />}
+          {user?.rol === 'administrador' ? <AuditLogs /> : <Navigate to="/dashboard" />}
         </ProtectedRoute>
       } />
 

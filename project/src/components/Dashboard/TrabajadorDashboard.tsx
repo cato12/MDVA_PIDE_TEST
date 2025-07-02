@@ -105,7 +105,7 @@ export function TrabajadorDashboard() {
       */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1 tracking-tight">
-          Bienvenido, <span className="text-[#C01702]">{user?.name?.split(' ')[0]}</span>
+          Bienvenido, <span className="text-[#C01702]">{user ? `${user.nombres} ${user.apellidos}` : ''}</span>
         </h1>
         <p className="text-base text-gray-500 dark:text-gray-300">
           Vista general de tus operaciones realizadas.

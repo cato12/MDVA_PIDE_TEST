@@ -7,7 +7,19 @@
  * @module AuthContext
  */
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User } from '../types';
+// Definición local de User para reflejar los campos de la base de datos
+export interface User {
+  id: string;
+  nombres: string;
+  apellidos: string;
+  dni: string;
+  email: string;
+  telefono?: string;
+  cargo: string;
+  area: string;
+  rol: 'trabajador' | 'administrador';
+  isActive: boolean;
+}
 
 
 /**
@@ -15,7 +27,7 @@ import { User } from '../types';
  */
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string, role: 'trabajador' | 'administrador') => Promise<boolean>;
+  login: (emailOrDni: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -28,32 +40,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 /**
  * Usuarios simulados para autenticación mock
  */
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'María Elena Quispe Mamani',
-    email: 'mquispe@municipalidad.gob.pe',
-    role: 'trabajador',
-    area: 'Recursos Humanos',
-    isActive: true
-  },
-  {
-    id: '2',
-    name: 'Carlos Alberto Vargas Herrera',
-    email: 'cvargas@municipalidad.gob.pe',
-    role: 'administrador',
-    area: 'Sistemas',
-    isActive: true
-  },
-  {
-    id: '3',
-    name: 'Ana Lucía Mendoza Torres',
-    email: 'amendoza@municipalidad.gob.pe',
-    role: 'trabajador',
-    area: 'Contabilidad',
-    isActive: true
-  }
-];
+// mockUsers eliminado, ahora login es real
 
 
 /**
@@ -77,18 +64,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Simula login: valida usuario, rol y contraseña ('123456').
    * Persiste usuario en localStorage.
    */
-  const login = async (email: string, password: string, role: 'trabajador' | 'administrador'): Promise<boolean> => {
+  const login = async (emailOrDni: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const foundUser = mockUsers.find(u => u.email === email && u.role === role);
-    if (foundUser && password === '123456') {
-      setUser(foundUser);
-      localStorage.setItem('municipal_user', JSON.stringify(foundUser));
+    try {
+      const response = await fetch('http://localhost:4000/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailOrDni, password })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        const user: User = {
+          id: String(data.user.id),
+          nombres: data.user.nombres,
+          apellidos: data.user.apellidos,
+          dni: data.user.dni,
+          email: data.user.email,
+          telefono: data.user.telefono,
+          cargo: data.user.cargo_nombre || '',
+          area: data.user.area_nombre || '',
+          rol: data.user.rol,
+          isActive: true
+        };
+        setUser(user);
+        localStorage.setItem('municipal_user', JSON.stringify(user));
+        setIsLoading(false);
+        return true;
+      }
       setIsLoading(false);
-      return true;
+      return false;
+    } catch (error) {
+      setIsLoading(false);
+      return false;
     }
-    setIsLoading(false);
-    return false;
   };
 
   /**

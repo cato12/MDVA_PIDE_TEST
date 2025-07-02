@@ -73,7 +73,7 @@ export function Sidebar() {
    * El menú se determina según el rol ('administrador' o 'trabajador').
    */
   const { user, logout } = useAuth();
-  const menuItems = user?.role === 'administrador' ? adminMenuItems : trabajadorMenuItems;
+  const menuItems = user?.rol === 'administrador' ? adminMenuItems : trabajadorMenuItems;
 
   return (
     <aside

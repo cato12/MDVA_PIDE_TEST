@@ -63,11 +63,11 @@ export function Header() {
               </div>
               <div>
                 {/* Nombre y rol del usuario autenticado */}
-                <p className="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[120px]" title={user?.name || ''}>
-                  {user?.name}
+                <p className="text-sm font-bold text-gray-900 dark:text-white truncate max-w-[160px]" title={user ? `${user.nombres} ${user.apellidos}` : ''}>
+                  {user ? `${user.nombres} ${user.apellidos}` : ''}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-300 capitalize truncate max-w-[120px]" title={user?.role || ''}>
-                  {user?.role}
+                <p className="text-xs text-gray-500 dark:text-gray-300 capitalize truncate max-w-[120px]" title={user?.rol || ''}>
+                  {user?.rol}
                 </p>
               </div>
             </div>
