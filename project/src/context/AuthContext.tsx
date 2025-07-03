@@ -7,6 +7,7 @@
  * @module AuthContext
  */
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { isSessionActive as checkSessionActive } from '../utils/session';
 // Definición local de User para reflejar los campos de la base de datos
 export interface User {
   id: string;
@@ -22,15 +23,17 @@ export interface User {
 }
 
 
+
 /**
  * Tipado del contexto de autenticación
  */
-interface AuthContextType {
+type AuthContextType = {
   user: User | null;
   login: (emailOrDni: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
-}
+  isSessionActive: () => boolean;
+};
 
 
 // Contexto de autenticación
@@ -107,8 +110,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('municipal_user');
   };
 
+  // Expone si la sesión es activa (token presente)
+  const isSessionActive = () => checkSessionActive();
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading, isSessionActive }}>
       {children}
     </AuthContext.Provider>
   );

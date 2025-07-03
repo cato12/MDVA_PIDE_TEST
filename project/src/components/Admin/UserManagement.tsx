@@ -15,6 +15,7 @@
  * @module UserManagement
  */
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../context/AuthContext';
 // Utilidades para obtener áreas y roles desde el backend
 const fetchAreas = async () => {
   try {
@@ -58,7 +59,7 @@ import { useToast } from '../../context/ToastContext';
  */
 interface Usuario {
   id: string;
-  nombre: string;
+  nombres: string;
   apellidos: string;
   email: string;
   telefono: string;
@@ -77,7 +78,7 @@ interface Usuario {
 const mockUsuarios: Usuario[] = [
   {
     id: '1',
-    nombre: 'María Elena',
+    nombres: 'María Elena',
     apellidos: 'Quispe Mamani',
     email: 'mquispe@municipalidad.gob.pe',
     telefono: '987654321',
@@ -93,7 +94,7 @@ const mockUsuarios: Usuario[] = [
   },
   {
     id: '2',
-    nombre: 'Carlos Alberto',
+    nombres: 'Carlos Alberto',
     apellidos: 'Vargas Herrera',
     email: 'cvargas@municipalidad.gob.pe',
     telefono: '987654322',
@@ -109,7 +110,7 @@ const mockUsuarios: Usuario[] = [
   },
   {
     id: '3',
-    nombre: 'Ana Lucía',
+    nombres: 'Ana Lucía',
     apellidos: 'Mendoza Torres',
     email: 'amendoza@municipalidad.gob.pe',
     telefono: '987654323',
@@ -147,7 +148,35 @@ const mockUsuarios: Usuario[] = [
  */
 export function UserManagement() {
   // Estado de usuarios y filtros
-  const [usuarios, setUsuarios] = useState<Usuario[]>(mockUsuarios);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [totalUsuariosDB, setTotalUsuariosDB] = useState<number>(0);
+  const { user: usuarioSesion } = useAuth();
+  // Cargar usuarios desde el backend al montar el componente
+  useEffect(() => {
+    const fetchUsuarios = async () => {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users`);
+        if (!res.ok) throw new Error('Error al obtener usuarios');
+        const data = await res.json();
+        // Mapear rol_id a string de rol
+        const mapRol = (rol_id: number | string) => {
+          if (rol_id === 1 || rol_id === '1') return 'administrador';
+          if (rol_id === 2 || rol_id === '2') return 'trabajador';
+          if (rol_id === 3 || rol_id === '3') return 'jefe_area';
+          return 'trabajador';
+        };
+        setUsuarios(data.map((u: any) => ({
+          ...u,
+          role: mapRol(u.rol_id)
+        })));
+        setTotalUsuariosDB(Array.isArray(data) ? data.length : 0);
+      } catch {
+        setUsuarios([]);
+        setTotalUsuariosDB(0);
+      }
+    };
+    fetchUsuarios();
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [roleFilter, setRoleFilter] = useState('todos');
@@ -236,10 +265,10 @@ export function UserManagement() {
    */
   const filteredUsuarios = usuarios.filter(user => {
     const matchesSearch =
-      user.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.apellidos.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.dni.includes(searchTerm);
+      (user.nombres?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
+      (user.apellidos?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
+      (user.email?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
+      (user.dni?.includes(searchTerm) || '');
     const matchesStatus = statusFilter === 'todos' || user.estado === statusFilter;
     const matchesRole = roleFilter === 'todos' || user.role === roleFilter;
     return matchesSearch && matchesStatus && matchesRole;
@@ -355,7 +384,7 @@ export function UserManagement() {
         <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center">
           <div className="flex items-center gap-3 mb-2">
             <Users className="h-8 w-8 text-[#C01702]" />
-            <span className="text-2xl font-bold text-gray-900 dark:text-white">{usuarios.length}</span>
+            <span className="text-2xl font-bold text-gray-900 dark:text-white">{totalUsuariosDB}</span>
           </div>
           <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Usuarios</span>
         </div>
@@ -459,13 +488,13 @@ export function UserManagement() {
                       <div className="flex-shrink-0">
                         <div className="w-10 h-10 rounded-full flex items-center justify-center border-2 border-[#C01702] bg-[#F6E7E4] dark:bg-[#2A1A18]">
                           <span className="text-[#C01702] font-bold text-base">
-                            {usuario.nombre.charAt(0)}{usuario.apellidos.charAt(0)}
+                            {(usuario.nombres?.charAt(0) || '')}{(usuario.apellidos?.charAt(0) || '')}
                           </span>
                         </div>
                       </div>
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {usuario.nombre} {usuario.apellidos}
+                          {usuario.nombres} {usuario.apellidos}
                         </div>
                         <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
                           <Mail className="h-3 w-3" />
@@ -478,22 +507,25 @@ export function UserManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-white">{usuario.cargo}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                      <Building className="h-3 w-3" />
-                      {usuario.area}
+                    <div className="text-sm text-gray-900 dark:text-white">
+                      {usuario.cargo}
+                      {usuario.area ? (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">/ {usuario.area}</span>
+                      ) : null}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {getRoleBadge(usuario.role)}
+                    {getRoleBadge(usuario.role ?? '')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(usuario.estado)}
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${usuarioSesion && usuarioSesion.id === usuario.id ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
+                      {usuarioSesion && usuarioSesion.id === usuario.id ? 'Activo' : 'No activo'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
-                      {new Date(usuario.ultimoAcceso).toLocaleDateString('es-PE')}
+                      {usuario.ultimoAcceso ? new Date(usuario.ultimoAcceso).toLocaleDateString('es-PE') : '—'}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -521,7 +553,7 @@ export function UserManagement() {
                         onClick={() => { setUserToDelete(usuario); setShowDeleteModal(true); }}
                         className="text-gray-400 hover:text-[#C01702] dark:hover:text-[#C01702] focus:outline-none focus:ring-2 focus:ring-[#C01702] rounded transition"
                         title="Eliminar usuario"
-                        aria-label={`Eliminar usuario ${usuario.nombre} ${usuario.apellidos}`}
+                        aria-label={`Eliminar usuario ${usuario.nombres} ${usuario.apellidos}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -544,7 +576,7 @@ export function UserManagement() {
             </div>
             <p className="text-white mb-7 text-base text-center break-words max-w-xs sm:max-w-sm md:max-w-md mx-auto">
               ¿Estás seguro de que deseas eliminar al usuario<br />
-              <span className="font-semibold break-words">{userToDelete.nombre} {userToDelete.apellidos}</span>?<br />
+              <span className="font-semibold break-words">{userToDelete.nombres} {userToDelete.apellidos}</span>?<br />
             </p>
             <div className="flex justify-center">
               <button
@@ -592,7 +624,7 @@ export function UserManagement() {
                   <input
                     type="text"
                     name="nombre"
-                    defaultValue={selectedUser?.nombre || ''}
+                    defaultValue={selectedUser?.nombres || ''}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
                     placeholder="Nombres"
                     aria-label="Nombres"
@@ -738,6 +770,7 @@ export function UserManagement() {
                         dni,
                         cargo_id: selectedCargoId,
                         rol_id: selectedRolId,
+                        area_id: selectedAreaId,
                         password: passwordValue
                       };
                       try {

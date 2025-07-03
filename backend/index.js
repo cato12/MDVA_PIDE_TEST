@@ -62,11 +62,17 @@ app.get('/roles', async (req, res) => {
   }
 });
 
-// Endpoint para obtener cargos 
+// Endpoint para obtener cargos, opcionalmente filtrados por area_id
 app.get('/cargos', async (req, res) => {
   try {
-     const result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
-     res.json(result.rows);
+    const { area_id } = req.query;
+    let result;
+    if (area_id) {
+      result = await pool.query('SELECT id, nombre FROM cargos WHERE area_id = $1 ORDER BY id', [area_id]);
+    } else {
+      result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
+    }
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener cargos' });
   }
@@ -83,21 +89,40 @@ app.post('/users', async (req, res) => {
     dni,
     cargo_id,
     rol_id,
+    area_id,
     password
   } = req.body;
-  if (!nombres || !apellidos || !email || !telefono || !dni || !cargo_id || !rol_id || !password) {
+  if (!nombres || !apellidos || !email || !telefono || !dni || !cargo_id || !rol_id || !area_id || !password) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
   try {
     const result = await pool.query(
-      `INSERT INTO users (nombres, apellidos, email, telefono, dni, cargo_id, rol_id, password)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [nombres, apellidos, email, telefono, dni, cargo_id, rol_id, password]
+      `INSERT INTO users (nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password]
     );
     res.status(201).json({ success: true, user: result.rows[0] });
   } catch (err) {
     console.error('Error al registrar usuario:', err);
     res.status(500).json({ error: 'Error al registrar usuario' });
+  }
+});
+
+// Endpoint para obtener todos los usuarios con nombre de cargo y área
+app.get('/users', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.nombres, u.apellidos, u.email, u.telefono, u.dni,
+             c.nombre AS cargo, a.nombre AS area, u.rol_id
+      FROM users u
+      LEFT JOIN cargos c ON u.cargo_id = c.id
+      LEFT JOIN areas a ON u.area_id = a.id
+      ORDER BY u.id
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error al obtener usuarios:', err);
+    res.status(500).json({ error: 'Error al obtener usuarios' });
   }
 });
 
