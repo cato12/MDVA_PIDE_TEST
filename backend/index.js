@@ -11,9 +11,14 @@ const port = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
+
+// Importar y usar la ruta para actualizar estado de usuario
+import userStatusRoutes from './routes/userStatus.js';
+app.use(userStatusRoutes(pool));
 
 app.post('/login', async (req, res) => {
   const { emailOrDni, password } = req.body;
@@ -79,6 +84,50 @@ app.get('/cargos', async (req, res) => {
   }
 });
 
+// Endpoint para actualizar un usuario existente
+app.put('/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const {
+    nombres,
+    apellidos,
+    email,
+    telefono,
+    dni,
+    cargo_id,
+    rol_id,
+    area_id,
+    password
+  } = req.body;
+
+  try {
+    const result = await pool.query(
+      `UPDATE users SET
+        nombres = $1, apellidos = $2, email = $3, telefono = $4, dni = $5,
+        cargo_id = $6, rol_id = $7, area_id = $8, password = $9
+      WHERE id = $10
+      RETURNING *`,
+      [nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password, id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    res.json({ success: true, user: result.rows[0] });
+  } catch (err) {
+    console.error('Error al actualizar usuario:', err);
+    res.status(500).json({ error: 'Error al actualizar usuario' });
+  }
+});
+
+// Endpoint para obtener todos los estados
+app.get('/estados', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id_estado AS id, nombre_estado AS nombre FROM estado ORDER BY id_estado');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al obtener estados' });
+  }
+});
+
 
 // Endpoint para registrar un nuevo usuario
 app.post('/users', async (req, res) => {
@@ -98,9 +147,9 @@ app.post('/users', async (req, res) => {
   }
   try {
     const result = await pool.query(
-      `INSERT INTO users (nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-      [nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password]
+      `INSERT INTO users (nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password, estado_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password, 1]
     );
     res.status(201).json({ success: true, user: result.rows[0] });
   } catch (err) {
@@ -114,10 +163,12 @@ app.get('/users', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT u.id, u.nombres, u.apellidos, u.email, u.telefono, u.dni,
-             c.nombre AS cargo, a.nombre AS area, u.rol_id
+             c.nombre AS cargo, a.nombre AS area, u.rol_id,
+             u.estado_id, est.nombre_estado AS estado, u.password
       FROM users u
       LEFT JOIN cargos c ON u.cargo_id = c.id
       LEFT JOIN areas a ON u.area_id = a.id
+      LEFT JOIN estado est ON u.estado_id = est.id_estado
       ORDER BY u.id
     `);
     res.json(result.rows);
@@ -130,8 +181,7 @@ app.get('/users', async (req, res) => {
 app.listen(port, () => {
   console.log(`Servidor backend escuchando en puerto ${port}`);
 });
-<<<<<<< HEAD
-=======
+
 
 // Endpoint para estadísticas del dashboard admin
 app.get('/admin-stats', async (req, res) => {
@@ -155,20 +205,19 @@ app.get('/admin-stats', async (req, res) => {
       JOIN cargos c ON u.cargo_id = c.id
       WHERE LOWER(c.nombre) = 'trabajador'
     `);
-    
-    // const recientes = await pool.query(`
-    //   SELECT u.id, u.nombres, u.apellidos, LOWER(r.nombre) AS rol, u.email, u.created_at
-    //   FROM users u
-    //   JOIN roles r ON u.rol_id = r.id
-    //   ORDER BY u.created_at DESC
-    //   LIMIT 4
-    // `);
+
+    // Contar usuarios suspendidos (estado_id = 2)
+    // Asegúrate que el id_estado=2 corresponde a 'Suspendido' en tu tabla estado
+    const suspendidosResult = await pool.query(`
+      SELECT COUNT(*) FROM users WHERE estado_id = 2
+    `);
 
     res.json({
       total: parseInt(totalResult.rows[0].count),
       admins: parseInt(adminResult.rows[0].count),
       areaHeads: parseInt(jefeAreaResult.rows[0].count),
-      trabajadores: parseInt(trabajadoresResult.rows[0].count)
+      trabajadores: parseInt(trabajadoresResult.rows[0].count),
+      suspendidos: parseInt(suspendidosResult.rows[0].count)
       //recientes: recientes.rows
     });
   } catch (err) {
@@ -176,4 +225,4 @@ app.get('/admin-stats', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener estadísticas del dashboard' });
   }
 });
->>>>>>> 7398334 (test_cambio)
+

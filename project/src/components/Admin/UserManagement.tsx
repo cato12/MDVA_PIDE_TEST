@@ -126,7 +126,7 @@ const mockUsuarios: Usuario[] = [
   },
   {
     id: '4',
-    nombre: 'José Miguel',
+    nombres: 'José Miguel',
     apellidos: 'Fernández Ruiz',
     email: 'jfernandez@municipalidad.gob.pe',
     telefono: '987654324',
@@ -180,14 +180,22 @@ export function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('todos');
   const [roleFilter, setRoleFilter] = useState('todos');
+  const [estados, setEstados] = useState<{ id: number; nombre: string }[]>([]);
   const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [password, setPassword] = useState(selectedUser?.password || '');
+  const [password, setPassword] = useState('');
   // Estados para áreas, roles y cargos
   const [areas, setAreas] = useState<any[]>([]);
-  const [roles, setRoles] = useState<any[]>([]);
+  const [roles, setRoles] = useState<{ id: number; nombre: string }[]>([]);
+  // Cargar roles para el filtro al montar el componente
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/roles`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setRoles(Array.isArray(data) ? data : []))
+      .catch(() => setRoles([]));
+  }, []);
   const [cargos, setCargos] = useState<{ id: number; nombre: string }[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string>('');
   const [selectedCargoId, setSelectedCargoId] = useState<string>('');
@@ -195,6 +203,13 @@ export function UserManagement() {
   // Referencia al formulario para obtener valores de manera segura
   const formRef = useRef<HTMLFormElement | null>(null);
   // Cargar áreas, roles y cargos al abrir el modal de usuario
+  // Cargar estados para los filtros al montar el componente
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/estados`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setEstados(Array.isArray(data) ? data : []))
+      .catch(() => setEstados([]));
+  }, []);
   useEffect(() => {
     if (showUserModal) {
       fetchAreas().then(data => {
@@ -253,9 +268,22 @@ export function UserManagement() {
    * Elimina un usuario del sistema.
    * @param userId - ID del usuario a eliminar
    */
-  const deleteUser = (userId: string) => {
-    setUsuarios((prev: Usuario[]) => prev.filter((user: Usuario) => user.id !== userId));
-    addToast('Usuario eliminado correctamente', 'success');
+  const deleteUser = async (userId: string) => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${userId}/estado`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'eliminado' })
+      });
+      if (res.ok) {
+        setUsuarios((prev: Usuario[]) => prev.filter((user: Usuario) => user.id !== userId));
+        addToast('Usuario eliminado correctamente', 'success');
+      } else {
+        addToast('No se pudo eliminar el usuario', 'error');
+      }
+    } catch {
+      addToast('Error de red al eliminar usuario', 'error');
+    }
     setShowDeleteModal(false);
     setUserToDelete(null);
   };
@@ -263,14 +291,25 @@ export function UserManagement() {
   /**
    * Filtra los usuarios según búsqueda, estado y rol.
    */
+  const normalize = (str = '') => str.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, '').toLowerCase();
   const filteredUsuarios = usuarios.filter(user => {
+    // No mostrar usuarios eliminados
+    const estadoUser = (user.estado || '').toString().trim().toLowerCase();
+    if (estadoUser === 'eliminado') return false;
     const matchesSearch =
       (user.nombres?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
       (user.apellidos?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
       (user.email?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
       (user.dni?.includes(searchTerm) || '');
-    const matchesStatus = statusFilter === 'todos' || user.estado === statusFilter;
-    const matchesRole = roleFilter === 'todos' || user.role === roleFilter;
+    const matchesStatus = statusFilter === 'todos' || estadoUser === statusFilter.toLowerCase();
+    // El filtro de rol compara el nombre real del rol, ignorando mayúsculas y espacios
+    // Buscar el nombre real del rol usando rol_id si existe, si no, usar user.role
+    let userRoleName = '';
+    if ('rol_id' in user && user.rol_id !== undefined) {
+      userRoleName = roles.find(r => r.id === (user as any).rol_id)?.nombre || '';
+    }
+    if (!userRoleName) userRoleName = user.role || '';
+    const matchesRole = roleFilter === 'todos' || normalize(userRoleName) === normalize(roleFilter);
     return matchesSearch && matchesStatus && matchesRole;
   });
 
@@ -279,19 +318,26 @@ export function UserManagement() {
    * @param estado - Estado del usuario
    */
   const getStatusBadge = (estado: string) => {
+    // Normalizar el estado recibido del backend
+    const estadoNorm = (estado || '').toLowerCase();
+    let key: 'activo' | 'suspendido' | 'eliminado' = 'eliminado';
+    if (estadoNorm === 'activo') key = 'activo';
+    else if (estadoNorm === 'suspendido') key = 'suspendido';
+    else if (estadoNorm === 'eliminado') key = 'eliminado';
+    // Colores y etiquetas
     const colors = {
       activo: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-      inactivo: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-      suspendido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+      suspendido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+      eliminado: 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
     };
     const labels = {
       activo: 'Activo',
-      inactivo: 'Inactivo',
-      suspendido: 'Suspendido'
+      suspendido: 'Suspendido',
+      eliminado: 'Eliminado'
     };
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[estado as keyof typeof colors]}`}>
-        {labels[estado as keyof typeof labels]}
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[key]}`}>
+        {labels[key]}
       </span>
     );
   };
@@ -300,20 +346,31 @@ export function UserManagement() {
    * Devuelve el badge visual para el rol del usuario.
    * @param role - Rol del usuario
    */
-  const getRoleBadge = (role: string) => {
-    const colors = {
-      trabajador: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-      jefe_area: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-      administrador: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
+  // Badge de rol: color según valor normalizado, texto según nombre real de la base de datos
+  const getRoleBadge = (role: string, rol_id?: any) => {
+    // Buscar el nombre real del rol en roles
+    let realName = '';
+    if (rol_id !== undefined) {
+      realName = roles.find(r => r.id === rol_id)?.nombre || '';
+    }
+    if (!realName) {
+      // Si no hay rol_id, intentar buscar por nombre normalizado
+      const found = roles.find(r => r.nombre && r.nombre.toLowerCase() === role?.toLowerCase());
+      realName = found?.nombre || role;
+    }
+    // Colores según valor normalizado
+    const colorMap: Record<string, string> = {
+      usuario: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      trabajador: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300', // por compatibilidad
+      administrador: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+      jefe_area: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
     };
-    const labels = {
-      trabajador: 'Trabajador',
-      jefe_area: 'Jefe de Área',
-      administrador: 'Administrador'
-    };
+    // Normalizar para color
+    const colorKey = (realName || role || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, '').toLowerCase();
+    const color = colorMap[colorKey] || 'bg-gray-200 text-gray-700';
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[role as keyof typeof colors]}`}>
-        {labels[role as keyof typeof labels]}
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}>
+        {realName}
       </span>
     );
   };
@@ -322,18 +379,26 @@ export function UserManagement() {
    * Activa o desactiva un usuario.
    * @param userId - ID del usuario
    */
-  const toggleUserStatus = (userId: string) => {
-    setUsuarios(prev => prev.map(user => {
-      if (user.id === userId) {
-        const newStatus = user.estado === 'activo' ? 'inactivo' : 'activo';
-        addToast(
-          `Usuario ${newStatus === 'activo' ? 'activado' : 'desactivado'} correctamente`,
-          'success'
-        );
-        return { ...user, estado: newStatus };
+  // Cambia el estado del usuario entre 'activo' y 'suspendido' en la base de datos y en el frontend
+  const toggleUserStatus = async (userId: string) => {
+    const user = usuarios.find(u => u.id === userId);
+    if (!user) return;
+    const nuevoEstado = (user.estado || '').toLowerCase() === 'activo' ? 'suspendido' : 'activo';
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${userId}/estado`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: nuevoEstado })
+      });
+      if (res.ok) {
+        setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, estado: nuevoEstado } : u));
+        addToast(`Usuario ${nuevoEstado === 'activo' ? 'activado' : 'suspendido'} correctamente`, 'success');
+      } else {
+        addToast('No se pudo cambiar el estado del usuario', 'error');
       }
-      return user;
-    }));
+    } catch {
+      addToast('Error de red al cambiar estado', 'error');
+    }
   };
 
   /**
@@ -343,20 +408,29 @@ export function UserManagement() {
   const openUserModal = (user?: Usuario) => {
     if (user) {
       setSelectedUser(user);
-      setPassword(user.password || '');
       setIsEditing(true);
-      // Buscar el área y cargo seleccionados
       setSelectedAreaId('');
       setSelectedCargoId(user.cargo || '');
     } else {
       setSelectedUser(null);
-      setPassword('');
       setIsEditing(false);
       setSelectedAreaId('');
       setSelectedCargoId('');
     }
     setShowUserModal(true);
   };
+
+  // Sincronizar el campo contraseña cada vez que se selecciona un usuario para editar y se abre el modal
+  useEffect(() => {
+    if (showUserModal) {
+      if (selectedUser && isEditing) {
+        // Si el usuario tiene password, úsalo; si no, pon cadena vacía
+        setPassword(selectedUser.password ?? '');
+      } else if (!selectedUser && !isEditing) {
+        setPassword('');
+      }
+    }
+  }, [showUserModal, selectedUser, isEditing]);
 
   return (
     <div className="space-y-10">
@@ -391,7 +465,7 @@ export function UserManagement() {
         <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center">
           <div className="flex items-center gap-3 mb-2">
             <UserCheck className="h-8 w-8 text-green-600" />
-            <span className="text-2xl font-bold text-green-600">{usuarios.filter(u => u.estado === 'activo').length}</span>
+            <span className="text-2xl font-bold text-green-600">{usuarios.filter(u => (u.estado || '').toLowerCase() === 'activo').length}</span>
           </div>
           <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Usuarios Activos</span>
         </div>
@@ -405,7 +479,7 @@ export function UserManagement() {
         <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center">
           <div className="flex items-center gap-3 mb-2">
             <UserX className="h-8 w-8 text-red-600" />
-            <span className="text-2xl font-bold text-red-600">{usuarios.filter(u => u.estado === 'suspendido').length}</span>
+            <span className="text-2xl font-bold text-red-600">{usuarios.filter(u => (u.estado || '').toLowerCase() === 'suspendido').length}</span>
           </div>
           <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Suspendidos</span>
         </div>
@@ -435,9 +509,9 @@ export function UserManagement() {
                 className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
               >
                 <option value="todos">Todos los estados</option>
-                <option value="activo">Activos</option>
-                <option value="inactivo">Inactivos</option>
-                <option value="suspendido">Suspendidos</option>
+                {(Array.isArray(estados) ? estados : []).filter((e: {nombre: string}) => (e.nombre || '').toLowerCase() !== 'eliminado').map((estado: {id: number, nombre: string}) => (
+                  <option key={estado.id} value={estado.nombre.toLowerCase()}>{estado.nombre.charAt(0).toUpperCase() + estado.nombre.slice(1).toLowerCase()}</option>
+                ))}
               </select>
             </div>
             <select
@@ -446,9 +520,9 @@ export function UserManagement() {
               className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 dark:bg-gray-700 dark:text-white"
             >
               <option value="todos">Todos los roles</option>
-              <option value="trabajador">Trabajadores</option>
-              <option value="jefe_area">Jefes de Área</option>
-              <option value="administrador">Administradores</option>
+              {roles.map((rol) => (
+                <option key={rol.id} value={rol.nombre.toLowerCase()}>{rol.nombre.charAt(0).toUpperCase() + rol.nombre.slice(1).toLowerCase()}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -515,12 +589,10 @@ export function UserManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {getRoleBadge(usuario.role ?? '')}
+                    {getRoleBadge(usuario.role ?? '', (usuario as any).rol_id)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${usuarioSesion && usuarioSesion.id === usuario.id ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
-                      {usuarioSesion && usuarioSesion.id === usuario.id ? 'Activo' : 'No activo'}
-                    </span>
+                    {getStatusBadge((usuario.estado || '').toLowerCase())}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1">
@@ -539,14 +611,16 @@ export function UserManagement() {
                       </button>
                       <button
                         onClick={() => toggleUserStatus(usuario.id)}
-                        className={`${
-                          usuario.estado === 'activo' 
-                            ? 'text-red-600 hover:text-red-900 dark:text-red-400' 
-                            : 'text-green-600 hover:text-green-900 dark:text-green-400'
+                        className={`$
+                          {(usuario.estado || '').toLowerCase() === 'activo'
+                            ? 'text-green-600 hover:text-green-900 dark:text-green-400'
+                            : 'text-red-600 hover:text-red-900 dark:text-red-400'}
                         }`}
-                        title={usuario.estado === 'activo' ? 'Desactivar usuario' : 'Activar usuario'}
+                        title={(usuario.estado || '').toLowerCase() === 'activo' ? 'Suspender usuario' : 'Activar usuario'}
                       >
-                        {usuario.estado === 'activo' ? <EyeOff className="h-4 w-4 text-red-600" /> : <Eye className="h-4 w-4 text-green-600" />}
+                        {(usuario.estado || '').toLowerCase() === 'activo'
+                          ? <Eye className="h-4 w-4 text-green-600" />
+                          : <EyeOff className="h-4 w-4 text-red-600" />}
                       </button>
                       
                       <button
@@ -557,9 +631,7 @@ export function UserManagement() {
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
-                      <span title="Iniciar sesión como este usuario">
-                        <LogIn className="h-4 w-4 text-sky-600" />
-                      </span>
+                      {/* Icono de iniciar sesión eliminado por requerimiento */}
       {/* Modal de confirmación de eliminación (fuera del mapeo de la tabla) */}
       {showDeleteModal && userToDelete && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
@@ -758,36 +830,59 @@ export function UserManagement() {
                       const email = (formData.get('email') || '').toString().trim();
                       const telefono = (formData.get('telefono') || '').toString().trim();
                       const passwordValue = password;
-                      if (!nombre || !apellidos || !dni || !email || !telefono || !passwordValue || !selectedAreaId || !selectedCargoId || !selectedRolId) {
+                      if (!nombre || !apellidos || !dni || !email || !telefono || !selectedAreaId || !selectedCargoId || !selectedRolId) {
                         addToast('Completa todos los campos obligatorios', 'error');
                         return;
                       }
                       const userPayload = {
-                        nombres: nombre, // Cambiado de 'nombre' a 'nombres'
+                        nombres: nombre,
                         apellidos,
                         email,
                         telefono,
                         dni,
                         cargo_id: selectedCargoId,
                         rol_id: selectedRolId,
-                        area_id: selectedAreaId,
-                        password: passwordValue
+                        area_id: selectedAreaId
                       };
-                      try {
-                        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(userPayload)
-                        });
-                        if (res.ok) {
-                          addToast('Usuario creado correctamente', 'success');
-                          setShowUserModal(false);
-                        } else {
-                          const data = await res.json();
-                          addToast(data.error || 'Error al crear usuario', 'error');
+                      if (!isEditing) {
+                        // Crear usuario
+                        const createPayload = { ...userPayload, password: passwordValue };
+                        try {
+                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(createPayload)
+                          });
+                          if (res.ok) {
+                            addToast('Usuario creado correctamente', 'success');
+                            setShowUserModal(false);
+                          } else {
+                            const data = await res.json();
+                            addToast(data.error || 'Error al crear usuario', 'error');
+                          }
+                        } catch {
+                          addToast('Error de red al crear usuario', 'error');
                         }
-                      } catch {
-                        addToast('Error de red al crear usuario', 'error');
+                      } else {
+                        // Editar usuario existente
+                        try {
+                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${selectedUser?.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...userPayload, password: passwordValue })
+                          });
+                          if (res.ok) {
+                            addToast('Usuario actualizado correctamente', 'success');
+                            setShowUserModal(false);
+                            // Actualizar usuario en el frontend
+                            setUsuarios(prev => prev.map(u => u.id === selectedUser?.id ? { ...u, ...userPayload, password: passwordValue } : u));
+                          } else {
+                            const data = await res.json();
+                            addToast(data.error || 'Error al actualizar usuario', 'error');
+                          }
+                        } catch {
+                          addToast('Error de red al actualizar usuario', 'error');
+                        }
                       }
                     }}
                     className="px-6 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold text-base transition focus:outline-none focus:ring-2 focus:ring-[#C01702] flex items-center gap-2 shadow-none"

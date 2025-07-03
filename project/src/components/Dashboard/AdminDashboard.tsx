@@ -24,17 +24,23 @@ import {
  * Muestra métricas, actividad y distribución de usuarios.
  */
 export function AdminDashboard() {
-    const [stats, setStats] = useState({
+  const [stats, setStats] = useState({
     total: 0,
     admins: 0,
     areaHeads: 0,
-    trabajadores: 0
+    trabajadores: 0,
+    suspendidos: 0
   });
 
   useEffect(() => {
-    axios.get('http://localhost:4000/admin-stats') // Cambia si usas proxy o entorno de producción
-      .then(res => setStats(res.data))
-      .catch(err => console.error('Error al cargar métricas:', err));
+    const fetchStats = () => {
+      axios.get('http://localhost:4000/admin-stats')
+        .then(res => setStats(res.data))
+        .catch(err => console.error('Error al cargar métricas:', err));
+    };
+    fetchStats();
+    const interval = setInterval(fetchStats, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Métricas principales del sistema
@@ -49,9 +55,17 @@ export function AdminDashboard() {
     },
     {
       title: 'Usuarios Activos', // Aún no implementado: usando total como placeholder
-      value: stats.total,
+      value: stats.total - (stats.suspendidos || 0),
       icon: UserCheck,
       color: 'bg-green-500',
+      change: '',
+      changeType: ''
+    },
+    {
+      title: 'Usuarios Suspendidos',
+      value: stats.suspendidos,
+      icon: AlertTriangle,
+      color: 'bg-yellow-500',
       change: '',
       changeType: ''
     },
@@ -114,10 +128,10 @@ export function AdminDashboard() {
   ];
 
   // Métricas de distribución de usuarios por rol
-  const totalUsuarios = 47;
-  const jefesArea = 4;
-  const admins = 5;
-  const trabajadores = 38 + jefesArea; // Suma jefes de área a trabajadores
+  // const totalUsuarios = 47;
+  // const jefesArea = 4;
+  // const admins = 5;
+  // const trabajadores = 38 + jefesArea; // Suma jefes de área a trabajadores
   const systemMetrics = [
     {
       label: 'Trabajadores',
@@ -143,19 +157,19 @@ export function AdminDashboard() {
    * Devuelve el badge visual para el estado de la actividad.
    * @param status - Estado de la actividad
    */
-  const getStatusBadge = (status: string) => {
-    const colors = {
-      Completado: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-      Exitoso: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-      Bloqueado: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-      Monitoreando: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
-    };
-    return (
-      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colors[status as keyof typeof colors]}`}>
-        {status}
-      </span>
-    );
-  };
+  // const getStatusBadge = (status: string) => {
+  //   const colors = {
+  //     Completado: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  //     Exitoso: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  //     Bloqueado: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+  //     Monitoreando: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+  //   };
+  //   return (
+  //     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colors[status as keyof typeof colors]}`}>
+  //       {status}
+  //     </span>
+  //   );
+  // };
 
   /**
    * Devuelve el ícono correspondiente a la prioridad de la actividad.
