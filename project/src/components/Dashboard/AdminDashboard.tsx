@@ -13,6 +13,8 @@
  *
  * @module AdminDashboard
  */
+import { useEffect, useState } from 'react';
+import axios from 'axios';
 import {
   Users, Activity, Shield, AlertTriangle, BarChart3, FileText, UserCheck, Eye
 } from 'lucide-react';
@@ -22,40 +24,53 @@ import {
  * Muestra métricas, actividad y distribución de usuarios.
  */
 export function AdminDashboard() {
+    const [stats, setStats] = useState({
+    total: 0,
+    admins: 0,
+    areaHeads: 0,
+    trabajadores: 0
+  });
+
+  useEffect(() => {
+    axios.get('http://localhost:4000/admin-stats') // Cambia si usas proxy o entorno de producción
+      .then(res => setStats(res.data))
+      .catch(err => console.error('Error al cargar métricas:', err));
+  }, []);
+
   // Métricas principales del sistema
   const adminStats = [
     {
       title: 'Total Usuarios',
-      value: 47,
+      value: stats.total,
       icon: Users,
       color: 'bg-blue-500',
-      change: '+3',
-      changeType: 'positive'
+      change: '',
+      changeType: ''
     },
     {
-      title: 'Usuarios Activos',
-      value: 43,
+      title: 'Usuarios Activos', // Aún no implementado: usando total como placeholder
+      value: stats.total,
       icon: UserCheck,
       color: 'bg-green-500',
-      change: '+2',
-      changeType: 'positive'
+      change: '',
+      changeType: ''
     },
     {
       title: 'Usuarios Administradores',
-      value: 5,
+      value: stats.admins,
       icon: Shield,
       color: 'bg-[#C01702]',
       change: '',
       changeType: ''
     },
-    {
-      title: 'Accesos Hoy',
-      value: 23,
-      icon: Eye,
-      color: 'bg-orange-500',
-      change: '+5',
-      changeType: 'positive'
-    }
+    // {
+    //   title: 'Accesos Hoy',
+    //   value: 23, // Simulado o podrías traerlo desde logs más adelante
+    //   icon: Eye,
+    //   color: 'bg-orange-500',
+    //   change: '',
+    //   changeType: ''
+    // }
   ];
 
   // Actividad reciente simulada
@@ -106,26 +121,23 @@ export function AdminDashboard() {
   const systemMetrics = [
     {
       label: 'Trabajadores',
-      value: trabajadores,
-      total: totalUsuarios,
-      percentage: Math.round((trabajadores / totalUsuarios) * 100)
+      value: stats.trabajadores,
+      total: stats.total,
+      percentage: stats.total > 0 ? Math.round((stats.trabajadores / stats.total) * 100) : 0
     },
     {
       label: 'Administradores',
-      value: admins,
-      total: totalUsuarios,
-      percentage: Math.round((admins / totalUsuarios) * 100)
+      value: stats.admins,
+      total: stats.total,
+      percentage: stats.total > 0 ? Math.round((stats.admins / stats.total) * 100) : 0
     },
     {
       label: 'Jefes de Área',
-      value: jefesArea,
-      total: totalUsuarios,
-      percentage: Math.round((jefesArea / totalUsuarios) * 100)
+      value: stats.areaHeads,
+      total: stats.total,
+      percentage: stats.total > 0 ? Math.round((stats.areaHeads / stats.total) * 100) : 0
     }
   ];
-
-
-
 
   /**
    * Devuelve el badge visual para el estado de la actividad.
@@ -175,7 +187,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {adminStats.map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -278,7 +290,7 @@ export function AdminDashboard() {
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2" aria-label="Progreso trabajadores" role="progressbar" aria-valuenow={systemMetrics[0].percentage} aria-valuemin={0} aria-valuemax={100}>
                 <div
                   className="bg-[#C01702] h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${systemMetrics[0].percentage}%` }}
+                  style={{ width: `${systemMetrics[0].percentage}% `}}
                 ></div>
               </div>
             </div>
@@ -300,7 +312,7 @@ export function AdminDashboard() {
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2" aria-label="Progreso administradores" role="progressbar" aria-valuenow={systemMetrics[1].percentage} aria-valuemin={0} aria-valuemax={100}>
                 <div
                   className="bg-[#C01702] h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${systemMetrics[1].percentage}%` }}
+                  style={{ width:` ${systemMetrics[1].percentage}%` }}
                 ></div>
               </div>
             </div>

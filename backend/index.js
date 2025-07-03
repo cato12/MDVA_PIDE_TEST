@@ -23,10 +23,10 @@ app.post('/login', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT u.*, c.nombre AS cargo_nombre, LOWER(r.nombre) AS rol
-       FROM users u
-       LEFT JOIN cargos c ON u.cargo_id = c.id
-       LEFT JOIN roles r ON u.rol_id = r.id
-       WHERE (u.email = $1 OR u.dni = $1) AND u.password = $2`,
+      FROM users u
+      LEFT JOIN cargos c ON u.cargo_id = c.id
+      LEFT JOIN roles r ON u.rol_id = r.id
+      WHERE (u.email = $1 OR u.dni = $1) AND u.password = $2`,
       [emailOrDni, password]
     );
     if (result.rows.length > 0) {
@@ -65,15 +65,6 @@ app.get('/roles', async (req, res) => {
 // Endpoint para obtener cargos, opcionalmente filtrados por area_id
 app.get('/cargos', async (req, res) => {
   try {
-<<<<<<< HEAD
-    const { area_id } = req.query;
-    let result;
-    if (area_id) {
-      result = await pool.query('SELECT id, nombre FROM cargos WHERE area_id = $1 ORDER BY id', [area_id]);
-    } else {
-      result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
-    }
-=======
     const result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
     // const { area_id } = req.query;
     // let result;
@@ -82,7 +73,6 @@ app.get('/cargos', async (req, res) => {
     // } else {
     //   result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
     // }
->>>>>>> 7398334 (test_cambio)
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener cargos' });
