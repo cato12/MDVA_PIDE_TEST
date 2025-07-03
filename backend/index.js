@@ -65,6 +65,7 @@ app.get('/roles', async (req, res) => {
 // Endpoint para obtener cargos, opcionalmente filtrados por area_id
 app.get('/cargos', async (req, res) => {
   try {
+<<<<<<< HEAD
     const { area_id } = req.query;
     let result;
     if (area_id) {
@@ -72,6 +73,16 @@ app.get('/cargos', async (req, res) => {
     } else {
       result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
     }
+=======
+    const result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
+    // const { area_id } = req.query;
+    // let result;
+    // if (area_id) {
+    //   result = await pool.query('SELECT id, nombre FROM cargos WHERE area_id = $1 ORDER BY id', [area_id]);
+    // } else {
+    //   result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
+    // }
+>>>>>>> 7398334 (test_cambio)
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener cargos' });
@@ -129,3 +140,50 @@ app.get('/users', async (req, res) => {
 app.listen(port, () => {
   console.log(`Servidor backend escuchando en puerto ${port}`);
 });
+<<<<<<< HEAD
+=======
+
+// Endpoint para estadísticas del dashboard admin
+app.get('/admin-stats', async (req, res) => {
+  try {
+    const totalResult = await pool.query('SELECT COUNT(*) FROM users');
+
+    const adminResult = await pool.query(`
+      SELECT COUNT(*) FROM users u
+      JOIN roles r ON u.rol_id = r.id
+      WHERE LOWER(r.nombre) = 'administrador'
+    `);
+
+    const jefeAreaResult = await pool.query(`
+      SELECT COUNT(*) FROM users u
+      JOIN cargos c ON u.cargo_id = c.id
+      WHERE LOWER(c.nombre) = 'jefe de area'
+    `);
+
+    const trabajadoresResult = await pool.query(`
+      SELECT COUNT(*) FROM users u
+      JOIN cargos c ON u.cargo_id = c.id
+      WHERE LOWER(c.nombre) = 'trabajador'
+    `);
+    
+    // const recientes = await pool.query(`
+    //   SELECT u.id, u.nombres, u.apellidos, LOWER(r.nombre) AS rol, u.email, u.created_at
+    //   FROM users u
+    //   JOIN roles r ON u.rol_id = r.id
+    //   ORDER BY u.created_at DESC
+    //   LIMIT 4
+    // `);
+
+    res.json({
+      total: parseInt(totalResult.rows[0].count),
+      admins: parseInt(adminResult.rows[0].count),
+      areaHeads: parseInt(jefeAreaResult.rows[0].count),
+      trabajadores: parseInt(trabajadoresResult.rows[0].count)
+      //recientes: recientes.rows
+    });
+  } catch (err) {
+    console.error('Error en /admin-stats:', err);
+    res.status(500).json({ error: 'Error al obtener estadísticas del dashboard' });
+  }
+});
+>>>>>>> 7398334 (test_cambio)
