@@ -40,8 +40,8 @@ const trabajadorMenuItems = [
 // Menú para administradores (acceso completo)
 const adminMenuItems = [
   { path: '/admin/dashboard', label: 'Panel Administrativo', icon: Home },
-  { path: '/admin/usuarios', label: 'Gestión de Usuarios', icon: Users },
-  { path: '/admin/logs', label: 'Monitoreo del Sistema', icon: Activity }
+  { path: '/admin/usuarios', label: 'Gestión de Usuarios', icon: Users }
+  // { path: '/admin/logs', label: 'Monitoreo del Sistema', icon: Activity }
 ];
 
 /**

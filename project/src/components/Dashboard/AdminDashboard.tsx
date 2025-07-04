@@ -53,22 +53,22 @@ export function AdminDashboard() {
       change: '',
       changeType: ''
     },
-    {
-      title: 'Usuarios Activos', // Aún no implementado: usando total como placeholder
-      value: stats.total - (stats.suspendidos || 0),
-      icon: UserCheck,
-      color: 'bg-green-500',
-      change: '',
-      changeType: ''
-    },
-    {
-      title: 'Usuarios Suspendidos',
-      value: stats.suspendidos,
-      icon: AlertTriangle,
-      color: 'bg-yellow-500',
-      change: '',
-      changeType: ''
-    },
+    // {
+    //   title: 'Usuarios Activos', // Aún no implementado: usando total como placeholder
+    //   value: stats.total - (stats.suspendidos || 0),
+    //   icon: UserCheck,
+    //   color: 'bg-green-500',
+    //   change: '',
+    //   changeType: ''
+    // },
+    // {
+    //   title: 'Usuarios Suspendidos',
+    //   value: stats.suspendidos,
+    //   icon: AlertTriangle,
+    //   color: 'bg-yellow-500',
+    //   change: '',
+    //   changeType: ''
+    // },
     {
       title: 'Usuarios Administradores',
       value: stats.admins,
@@ -76,7 +76,7 @@ export function AdminDashboard() {
       color: 'bg-[#C01702]',
       change: '',
       changeType: ''
-    },
+    }
     // {
     //   title: 'Accesos Hoy',
     //   value: 23, // Simulado o podrías traerlo desde logs más adelante
@@ -88,50 +88,45 @@ export function AdminDashboard() {
   ];
 
   // Actividad reciente simulada
-  const recentActivity = [
-    {
-      id: '1',
-      type: 'Usuario',
-      title: 'Nuevo usuario registrado: Ana Mendoza Torres',
-      description: 'Usuario creado en el área de Contabilidad',
-      time: 'Hace 1 hora',
-      status: 'Completado',
-      priority: 'media'
-    },
-    {
-      id: '2',
-      type: 'Sistema',
-      title: 'Respaldo automático completado',
-      description: 'Base de datos respaldada exitosamente',
-      time: 'Hace 2 horas',
-      status: 'Exitoso',
-      priority: 'baja'
-    },
-    {
-      id: '3',
-      type: 'Seguridad',
-      title: 'Intento de acceso fallido detectado',
-      description: 'IP: 192.168.1.110 - Usuario: Pedro Ramírez',
-      time: 'Hace 3 horas',
-      status: 'Bloqueado',
-      priority: 'alta'
-    },
-    {
-      id: '4',
-      type: 'Consulta',
-      title: 'Pico de consultas RUC detectado',
-      description: '156 consultas en la última hora',
-      time: 'Hace 4 horas',
-      status: 'Monitoreando',
-      priority: 'media'
-    }
-  ];
+  // const recentActivity = [
+  //   {
+  //     id: '1',
+  //     type: 'Usuario',
+  //     title: 'Nuevo usuario registrado: Ana Mendoza Torres',
+  //     description: 'Usuario creado en el área de Contabilidad',
+  //     time: 'Hace 1 hora',
+  //     status: 'Completado',
+  //     priority: 'media'
+  //   },
+  //   {
+  //     id: '2',
+  //     type: 'Sistema',
+  //     title: 'Respaldo automático completado',
+  //     description: 'Base de datos respaldada exitosamente',
+  //     time: 'Hace 2 horas',
+  //     status: 'Exitoso',
+  //     priority: 'baja'
+  //   },
+  //   {
+  //     id: '3',
+  //     type: 'Seguridad',
+  //     title: 'Intento de acceso fallido detectado',
+  //     description: 'IP: 192.168.1.110 - Usuario: Pedro Ramírez',
+  //     time: 'Hace 3 horas',
+  //     status: 'Bloqueado',
+  //     priority: 'alta'
+  //   },
+  //   {
+  //     id: '4',
+  //     type: 'Consulta',
+  //     title: 'Pico de consultas RUC detectado',
+  //     description: '156 consultas en la última hora',
+  //     time: 'Hace 4 horas',
+  //     status: 'Monitoreando',
+  //     priority: 'media'
+  //   }
+  // ];
 
-  // Métricas de distribución de usuarios por rol
-  // const totalUsuarios = 47;
-  // const jefesArea = 4;
-  // const admins = 5;
-  // const trabajadores = 38 + jefesArea; // Suma jefes de área a trabajadores
   const systemMetrics = [
     {
       label: 'Trabajadores',
@@ -201,7 +196,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
         {adminStats.map((stat, index) => {
           const Icon = stat.icon;
           return (
@@ -230,9 +225,9 @@ export function AdminDashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-10">
         {/* Actividad Reciente (mejorado) */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
+        {/* <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">
             <Activity className="h-5 w-5 text-[#C01702]" />
             <span className="text-[#C01702]">Actividad Reciente del Sistema</span>
@@ -267,7 +262,7 @@ export function AdminDashboard() {
               </div>
             ))}
           </div>
-        </div>
+        </div> */}
         {/* Métricas del Sistema */}
         <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">

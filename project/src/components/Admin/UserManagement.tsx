@@ -16,6 +16,13 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import {
+  Users, Search, Filter, Plus, Edit, Trash2, AlertTriangle, ShieldCheck, UserCheck, UserX, Mail, Eye, EyeOff, Calendar
+} from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 // Utilidades para obtener áreas y roles desde el backend
 const fetchAreas = async () => {
   try {
@@ -49,10 +56,6 @@ const fetchCargos = async (areaId?: string) => {
     return [];
   }
 };
-import {
-  Users, Search, Filter, Plus, Edit, Trash2, AlertTriangle, Shield, ShieldCheck, Eye, EyeOff, UserCheck, UserX, Mail, Phone, Calendar, Building, LogIn
-} from 'lucide-react';
-import { useToast } from '../../context/ToastContext';
 
 /**
  * Estructura de un usuario del sistema.
@@ -74,83 +77,32 @@ interface Usuario {
   password?: string;
 }
 
-// Datos simulados de usuarios para demostración
-const mockUsuarios: Usuario[] = [
-  {
-    id: '1',
-    nombres: 'María Elena',
-    apellidos: 'Quispe Mamani',
-    email: 'mquispe@municipalidad.gob.pe',
-    telefono: '987654321',
-    dni: '12345678',
-    cargo: 'Especialista en RRHH',
-    area: 'Recursos Humanos',
-    role: 'trabajador',
-    estado: 'activo',
-    fechaIngreso: '2023-03-15',
-    ultimoAcceso: '2024-01-25T14:30:00',
-    permisos: ['expedientes', 'vacaciones', 'recursos'],
-    password: 'maria1234'
-  },
-  {
-    id: '2',
-    nombres: 'Carlos Alberto',
-    apellidos: 'Vargas Herrera',
-    email: 'cvargas@municipalidad.gob.pe',
-    telefono: '987654322',
-    dni: '87654321',
-    cargo: 'Administrador de Sistemas',
-    area: 'Sistemas',
-    role: 'administrador',
-    estado: 'activo',
-    fechaIngreso: '2022-01-10',
-    ultimoAcceso: '2024-01-25T16:45:00',
-    permisos: ['todos'],
-    password: 'carlos2024'
-  },
-  {
-    id: '3',
-    nombres: 'Ana Lucía',
-    apellidos: 'Mendoza Torres',
-    email: 'amendoza@municipalidad.gob.pe',
-    telefono: '987654323',
-    dni: '11223344',
-    cargo: 'Contadora',
-    area: 'Contabilidad',
-    role: 'jefe_area',
-    estado: 'activo',
-    fechaIngreso: '2023-06-01',
-    ultimoAcceso: '2024-01-24T11:20:00',
-    permisos: ['expedientes', 'aprobaciones_area', 'reportes'],
-    password: 'ana2025'
-  },
-  {
-    id: '4',
-    nombres: 'José Miguel',
-    apellidos: 'Fernández Ruiz',
-    email: 'jfernandez@municipalidad.gob.pe',
-    telefono: '987654324',
-    dni: '55667788',
-    cargo: 'Ingeniero Civil',
-    area: 'Obras Públicas',
-    role: 'trabajador',
-    estado: 'suspendido',
-    fechaIngreso: '2023-09-15',
-    ultimoAcceso: '2024-01-20T09:15:00',
-    permisos: ['expedientes', 'recursos'],
-    password: 'josemiguel'
-  }
-];
-
-/**
- * Componente principal de gestión de usuarios.
- * Permite crear, editar, filtrar, eliminar y visualizar usuarios del sistema.
- */
 export function UserManagement() {
   // Estado de usuarios y filtros
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [totalUsuariosDB, setTotalUsuariosDB] = useState<number>(0);
   const { user: usuarioSesion } = useAuth();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [roleFilter, setRoleFilter] = useState('todos');
+  const [estados, setEstados] = useState<{ id: number; nombre: string }[]>([]);
+  const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] = useState('');
+  // Estados para áreas, roles y cargos
+  const [areas, setAreas] = useState<any[]>([]);
+  const [roles, setRoles] = useState<{ id: number; nombre: string }[]>([]);
+  const [cargos, setCargos] = useState<{ id: number; nombre: string }[]>([]);
+  const [selectedAreaId, setSelectedAreaId] = useState<string>('');
+  const [selectedCargoId, setSelectedCargoId] = useState<string>('');
+  const [selectedRolId, setSelectedRolId] = useState<string>('');
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const { addToast } = useToast();
+  const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   // Cargar usuarios desde el backend al montar el componente
   useEffect(() => {
     const fetchUsuarios = async () => {
@@ -177,18 +129,7 @@ export function UserManagement() {
     };
     fetchUsuarios();
   }, []);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('todos');
-  const [roleFilter, setRoleFilter] = useState('todos');
-  const [estados, setEstados] = useState<{ id: number; nombre: string }[]>([]);
-  const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
-  const [showUserModal, setShowUserModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [password, setPassword] = useState('');
-  // Estados para áreas, roles y cargos
-  const [areas, setAreas] = useState<any[]>([]);
-  const [roles, setRoles] = useState<{ id: number; nombre: string }[]>([]);
+
   // Cargar roles para el filtro al montar el componente
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/roles`)
@@ -196,32 +137,26 @@ export function UserManagement() {
       .then(data => setRoles(Array.isArray(data) ? data : []))
       .catch(() => setRoles([]));
   }, []);
-  const [cargos, setCargos] = useState<{ id: number; nombre: string }[]>([]);
-  const [selectedAreaId, setSelectedAreaId] = useState<string>('');
-  const [selectedCargoId, setSelectedCargoId] = useState<string>('');
-  const [selectedRolId, setSelectedRolId] = useState<string>('');
-  // Referencia al formulario para obtener valores de manera segura
-  const formRef = useRef<HTMLFormElement | null>(null);
-  // Cargar áreas, roles y cargos al abrir el modal de usuario
+
   // Cargar estados para los filtros al montar el componente
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/estados`)
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/estado`)
       .then(res => res.ok ? res.json() : [])
       .then(data => setEstados(Array.isArray(data) ? data : []))
       .catch(() => setEstados([]));
   }, []);
+
+  // Cargar áreas, roles y cargos al abrir el modal de usuario
   useEffect(() => {
     if (showUserModal) {
       fetchAreas().then(data => {
         setAreas(data);
-        // Si hay un usuario seleccionado, buscar cargos de su área
         if (selectedUser && data.length) {
           const areaObj = data.find((a: any) => a.nombre === selectedUser.area);
           if (areaObj) {
             setSelectedAreaId(areaObj.id);
             fetchCargos(areaObj.id).then(cgs => {
               setCargos(cgs);
-              // Buscar el cargo por nombre y setear el id
               const cargoObj = cgs.find((c: any) => c.nombre === selectedUser.cargo);
               if (cargoObj) setSelectedCargoId(cargoObj.id);
             });
@@ -251,7 +186,6 @@ export function UserManagement() {
   useEffect(() => {
     if (showUserModal) {
       fetchCargos().then((data) => {
-        // Asegurarse de que los datos sean del tipo correcto
         if (Array.isArray(data)) {
           setCargos(data.filter((c) => c && c.id && c.nombre));
         } else {
@@ -260,9 +194,17 @@ export function UserManagement() {
       });
     }
   }, [showUserModal]);
-  const { addToast } = useToast();
-  const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Sincronizar el campo contraseña cada vez que se selecciona un usuario para editar y se abre el modal
+  useEffect(() => {
+    if (showUserModal) {
+      if (selectedUser && isEditing) {
+        setPassword(selectedUser.password ?? '');
+      } else if (!selectedUser && !isEditing) {
+        setPassword('');
+      }
+    }
+  }, [showUserModal, selectedUser, isEditing]);
 
   /**
    * Elimina un usuario del sistema.
@@ -293,7 +235,6 @@ export function UserManagement() {
    */
   const normalize = (str = '') => str.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, '').toLowerCase();
   const filteredUsuarios = usuarios.filter(user => {
-    // No mostrar usuarios eliminados
     const estadoUser = (user.estado || '').toString().trim().toLowerCase();
     if (estadoUser === 'eliminado') return false;
     const matchesSearch =
@@ -302,10 +243,8 @@ export function UserManagement() {
       (user.email?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
       (user.dni?.includes(searchTerm) || '');
     const matchesStatus = statusFilter === 'todos' || estadoUser === statusFilter.toLowerCase();
-    // El filtro de rol compara el nombre real del rol, ignorando mayúsculas y espacios
-    // Buscar el nombre real del rol usando rol_id si existe, si no, usar user.role
     let userRoleName = '';
-    if ('rol_id' in user && user.rol_id !== undefined) {
+    if ('rol_id' in user && (user as any).rol_id !== undefined) {
       userRoleName = roles.find(r => r.id === (user as any).rol_id)?.nombre || '';
     }
     if (!userRoleName) userRoleName = user.role || '';
@@ -318,13 +257,11 @@ export function UserManagement() {
    * @param estado - Estado del usuario
    */
   const getStatusBadge = (estado: string) => {
-    // Normalizar el estado recibido del backend
     const estadoNorm = (estado || '').toLowerCase();
     let key: 'activo' | 'suspendido' | 'eliminado' = 'eliminado';
     if (estadoNorm === 'activo') key = 'activo';
     else if (estadoNorm === 'suspendido') key = 'suspendido';
     else if (estadoNorm === 'eliminado') key = 'eliminado';
-    // Colores y etiquetas
     const colors = {
       activo: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
       suspendido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
@@ -346,26 +283,21 @@ export function UserManagement() {
    * Devuelve el badge visual para el rol del usuario.
    * @param role - Rol del usuario
    */
-  // Badge de rol: color según valor normalizado, texto según nombre real de la base de datos
   const getRoleBadge = (role: string, rol_id?: any) => {
-    // Buscar el nombre real del rol en roles
     let realName = '';
     if (rol_id !== undefined) {
       realName = roles.find(r => r.id === rol_id)?.nombre || '';
     }
     if (!realName) {
-      // Si no hay rol_id, intentar buscar por nombre normalizado
       const found = roles.find(r => r.nombre && r.nombre.toLowerCase() === role?.toLowerCase());
       realName = found?.nombre || role;
     }
-    // Colores según valor normalizado
     const colorMap: Record<string, string> = {
       usuario: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-      trabajador: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300', // por compatibilidad
+      trabajador: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
       administrador: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
       jefe_area: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
     };
-    // Normalizar para color
     const colorKey = (realName || role || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, '').toLowerCase();
     const color = colorMap[colorKey] || 'bg-gray-200 text-gray-700';
     return (
@@ -379,7 +311,6 @@ export function UserManagement() {
    * Activa o desactiva un usuario.
    * @param userId - ID del usuario
    */
-  // Cambia el estado del usuario entre 'activo' y 'suspendido' en la base de datos y en el frontend
   const toggleUserStatus = async (userId: string) => {
     const user = usuarios.find(u => u.id === userId);
     if (!user) return;
@@ -420,17 +351,71 @@ export function UserManagement() {
     setShowUserModal(true);
   };
 
-  // Sincronizar el campo contraseña cada vez que se selecciona un usuario para editar y se abre el modal
-  useEffect(() => {
-    if (showUserModal) {
-      if (selectedUser && isEditing) {
-        // Si el usuario tiene password, úsalo; si no, pon cadena vacía
-        setPassword(selectedUser.password ?? '');
-      } else if (!selectedUser && !isEditing) {
-        setPassword('');
+  // Util: capitalizar string
+  function capitalize(str: string) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  // Generar reporte PDF
+  const generarReportePDF = () => {
+    const doc = new jsPDF('landscape');
+    const img = new Image();
+    img.src = '/imagenes/logo_mdva_rojo.png';
+
+    img.onload = () => {
+      doc.addImage(img, 'PNG', 14, 10, 30, 30);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(192, 23, 2);
+      doc.text('Reporte de Usuarios', 50, 25);
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      const fechaHora = new Date().toLocaleString('es-PE');
+      doc.text(`Fecha: ${fechaHora}`, 50, 32);
+      if (usuarioSesion) {
+        doc.text(`Generado por: ${usuarioSesion.nombres} ${usuarioSesion.apellidos} - ${usuarioSesion.email}`, 180, 32);
       }
-    }
-  }, [showUserModal, selectedUser, isEditing]);
+      const cols = ['Nombre', 'DNI', 'Correo', 'Teléfono', 'Cargo', 'Área', 'Rol', 'Estado'];
+      const usersToReport = filteredUsuarios;
+      const rows = usersToReport.map(u => [
+        `${u.nombres} ${u.apellidos}`,
+        u.dni,
+        u.email,
+        u.telefono || '—',
+        u.cargo || '—',
+        u.area || '—',
+        u.role ? capitalize(u.role) : 'Sin Rol',
+        u.estado ? capitalize(u.estado) : 'Desconocido'
+      ]);
+      autoTable(doc, {
+        startY: 45,
+        head: [cols],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [192, 23, 2], halign: 'center' },
+        styles: { fontSize: 9, cellPadding: 3 },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 50 },
+          3: { cellWidth: 25 }
+        }
+      });
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        doc.setFontSize(9);
+        doc.setTextColor(150);
+        doc.text('Municipalidad Distrital De Vista Alegre - Sistema MDVA', pageWidth / 2, pageHeight - 10, { align: 'center' });
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
+      }
+      const fecha = new Date().toISOString().split('T')[0];
+      doc.save(`usuarios_${fecha}.pdf`);
+    };
+  };
 
   return (
     <div className="space-y-10">
@@ -509,7 +494,7 @@ export function UserManagement() {
                 className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
               >
                 <option value="todos">Todos los estados</option>
-                {(Array.isArray(estados) ? estados : []).filter((e: {nombre: string}) => (e.nombre || '').toLowerCase() !== 'eliminado').map((estado: {id: number, nombre: string}) => (
+                {(Array.isArray(estados) ? estados : []).filter((e: { nombre: string }) => (e.nombre || '').toLowerCase() !== 'eliminado').map((estado: { id: number, nombre: string }) => (
                   <option key={estado.id} value={estado.nombre.toLowerCase()}>{estado.nombre.charAt(0).toUpperCase() + estado.nombre.slice(1).toLowerCase()}</option>
                 ))}
               </select>
@@ -612,17 +597,17 @@ export function UserManagement() {
                       <button
                         onClick={() => toggleUserStatus(usuario.id)}
                         className={`$
-                          {(usuario.estado || '').toLowerCase() === 'activo'
-                            ? 'text-green-600 hover:text-green-900 dark:text-green-400'
-                            : 'text-red-600 hover:text-red-900 dark:text-red-400'}
-                        }`}
+                            {(usuario.estado || '').toLowerCase() === 'activo'
+                              ? 'text-green-600 hover:text-green-900 dark:text-green-400'
+                              : 'text-red-600 hover:text-red-900 dark:text-red-400'}
+                          }`}
                         title={(usuario.estado || '').toLowerCase() === 'activo' ? 'Suspender usuario' : 'Activar usuario'}
                       >
                         {(usuario.estado || '').toLowerCase() === 'activo'
                           ? <Eye className="h-4 w-4 text-green-600" />
                           : <EyeOff className="h-4 w-4 text-red-600" />}
                       </button>
-                      
+
                       <button
                         onClick={() => { setUserToDelete(usuario); setShowDeleteModal(true); }}
                         className="text-gray-400 hover:text-[#C01702] dark:hover:text-[#C01702] focus:outline-none focus:ring-2 focus:ring-[#C01702] rounded transition"
@@ -632,36 +617,36 @@ export function UserManagement() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                       {/* Icono de iniciar sesión eliminado por requerimiento */}
-      {/* Modal de confirmación de eliminación (fuera del mapeo de la tabla) */}
-      {showDeleteModal && userToDelete && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#C01702] rounded-2xl max-w-md w-full border-2 border-[#C01702] shadow-2xl p-7 relative">
-            <button
-              onClick={() => { setShowDeleteModal(false); setUserToDelete(null); }}
-              className="absolute top-3 right-3 text-white hover:text-gray-200 text-2xl font-bold focus:outline-none"
-              aria-label="Cerrar modal"
-            >
-              ×
-            </button>
-            <div className="flex flex-col items-center justify-center mb-4">
-              <AlertTriangle className="h-20 w-20 text-white mb-2" />
-            </div>
-            <p className="text-white mb-7 text-base text-center break-words max-w-xs sm:max-w-sm md:max-w-md mx-auto">
-              ¿Estás seguro de que deseas eliminar al usuario<br />
-              <span className="font-semibold break-words">{userToDelete.nombres} {userToDelete.apellidos}</span>?<br />
-            </p>
-            <div className="flex justify-center">
-              <button
-                onClick={() => deleteUser(userToDelete.id)}
-                className="px-8 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-xl font-bold shadow flex items-center gap-3 text-lg border-2 border-white transition"
-                autoFocus
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                      {/* Modal de confirmación de eliminación (fuera del mapeo de la tabla) */}
+                      {showDeleteModal && userToDelete && (
+                        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
+                          <div className="bg-[#C01702] rounded-2xl max-w-md w-full border-2 border-[#C01702] shadow-2xl p-7 relative">
+                            <button
+                              onClick={() => { setShowDeleteModal(false); setUserToDelete(null); }}
+                              className="absolute top-3 right-3 text-white hover:text-gray-200 text-2xl font-bold focus:outline-none"
+                              aria-label="Cerrar modal"
+                            >
+                              ×
+                            </button>
+                            <div className="flex flex-col items-center justify-center mb-4">
+                              <AlertTriangle className="h-20 w-20 text-white mb-2" />
+                            </div>
+                            <p className="text-white mb-7 text-base text-center break-words max-w-xs sm:max-w-sm md:max-w-md mx-auto">
+                              ¿Estás seguro de que deseas eliminar al usuario<br />
+                              <span className="font-semibold break-words">{userToDelete.nombres} {userToDelete.apellidos}</span>?<br />
+                            </p>
+                            <div className="flex justify-center">
+                              <button
+                                onClick={() => deleteUser(userToDelete.id)}
+                                className="px-8 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-xl font-bold shadow flex items-center gap-3 text-lg border-2 border-white transition"
+                                autoFocus
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -688,7 +673,7 @@ export function UserManagement() {
                 ×
               </button>
             </div>
-                <form className="px-6 py-6" ref={formRef}>
+            <form className="px-6 py-6" ref={formRef}>
               {/* Datos personales y laborales agrupados en dos columnas en md+ */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
                 <div>
@@ -817,80 +802,80 @@ export function UserManagement() {
                   </select>
                 </div>
               </div>
-                <div className="flex justify-center mt-4">
-                  <button
-                    type="submit"
-                    onClick={async e => {
-                      e.preventDefault();
-                      if (!formRef.current) return;
-                      const formData = new FormData(formRef.current);
-                      const nombre = (formData.get('nombre') || '').toString().trim();
-                      const apellidos = (formData.get('apellidos') || '').toString().trim();
-                      const dni = (formData.get('dni') || '').toString().trim();
-                      const email = (formData.get('email') || '').toString().trim();
-                      const telefono = (formData.get('telefono') || '').toString().trim();
-                      const passwordValue = password;
-                      if (!nombre || !apellidos || !dni || !email || !telefono || !selectedAreaId || !selectedCargoId || !selectedRolId) {
-                        addToast('Completa todos los campos obligatorios', 'error');
-                        return;
-                      }
-                      const userPayload = {
-                        nombres: nombre,
-                        apellidos,
-                        email,
-                        telefono,
-                        dni,
-                        cargo_id: selectedCargoId,
-                        rol_id: selectedRolId,
-                        area_id: selectedAreaId
-                      };
-                      if (!isEditing) {
-                        // Crear usuario
-                        const createPayload = { ...userPayload, password: passwordValue };
-                        try {
-                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(createPayload)
-                          });
-                          if (res.ok) {
-                            addToast('Usuario creado correctamente', 'success');
-                            setShowUserModal(false);
-                          } else {
-                            const data = await res.json();
-                            addToast(data.error || 'Error al crear usuario', 'error');
-                          }
-                        } catch {
-                          addToast('Error de red al crear usuario', 'error');
+              <div className="flex justify-center mt-4">
+                <button
+                  type="submit"
+                  onClick={async e => {
+                    e.preventDefault();
+                    if (!formRef.current) return;
+                    const formData = new FormData(formRef.current);
+                    const nombre = (formData.get('nombre') || '').toString().trim();
+                    const apellidos = (formData.get('apellidos') || '').toString().trim();
+                    const dni = (formData.get('dni') || '').toString().trim();
+                    const email = (formData.get('email') || '').toString().trim();
+                    const telefono = (formData.get('telefono') || '').toString().trim();
+                    const passwordValue = password;
+                    if (!nombre || !apellidos || !dni || !email || !telefono || !selectedAreaId || !selectedCargoId || !selectedRolId) {
+                      addToast('Completa todos los campos obligatorios', 'error');
+                      return;
+                    }
+                    const userPayload = {
+                      nombres: nombre,
+                      apellidos,
+                      email,
+                      telefono,
+                      dni,
+                      cargo_id: selectedCargoId,
+                      rol_id: selectedRolId,
+                      area_id: selectedAreaId
+                    };
+                    if (!isEditing) {
+                      // Crear usuario
+                      const createPayload = { ...userPayload, password: passwordValue };
+                      try {
+                        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify(createPayload)
+                        });
+                        if (res.ok) {
+                          addToast('Usuario creado correctamente', 'success');
+                          setShowUserModal(false);
+                        } else {
+                          const data = await res.json();
+                          addToast(data.error || 'Error al crear usuario', 'error');
                         }
-                      } else {
-                        // Editar usuario existente
-                        try {
-                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${selectedUser?.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...userPayload, password: passwordValue })
-                          });
-                          if (res.ok) {
-                            addToast('Usuario actualizado correctamente', 'success');
-                            setShowUserModal(false);
-                            // Actualizar usuario en el frontend
-                            setUsuarios(prev => prev.map(u => u.id === selectedUser?.id ? { ...u, ...userPayload, password: passwordValue } : u));
-                          } else {
-                            const data = await res.json();
-                            addToast(data.error || 'Error al actualizar usuario', 'error');
-                          }
-                        } catch {
-                          addToast('Error de red al actualizar usuario', 'error');
-                        }
+                      } catch {
+                        addToast('Error de red al crear usuario', 'error');
                       }
-                    }}
-                    className="px-6 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold text-base transition focus:outline-none focus:ring-2 focus:ring-[#C01702] flex items-center gap-2 shadow-none"
-                  >
-                    <UserCheck className="h-5 w-5 text-white" />
-                    {isEditing ? 'Actualizar' : 'Crear'} Usuario
-                  </button>
-                </div>
+                    } else {
+                      // Editar usuario existente
+                      try {
+                        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${selectedUser?.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ ...userPayload, password: passwordValue })
+                        });
+                        if (res.ok) {
+                          addToast('Usuario actualizado correctamente', 'success');
+                          setShowUserModal(false);
+                          // Actualizar usuario en el frontend
+                          setUsuarios(prev => prev.map(u => u.id === selectedUser?.id ? { ...u, ...userPayload, password: passwordValue } : u));
+                        } else {
+                          const data = await res.json();
+                          addToast(data.error || 'Error al actualizar usuario', 'error');
+                        }
+                      } catch {
+                        addToast('Error de red al actualizar usuario', 'error');
+                      }
+                    }
+                  }}
+                  className="px-6 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold text-base transition focus:outline-none focus:ring-2 focus:ring-[#C01702] flex items-center gap-2 shadow-none"
+                >
+                  <UserCheck className="h-5 w-5 text-white" />
+                  {isEditing ? 'Actualizar' : 'Crear'} Usuario
+                </button>
+              </div>
             </form>
           </div>
         </div>

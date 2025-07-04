@@ -11,12 +11,11 @@ const port = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-// Importar y usar la ruta para actualizar estado de usuario
+// Importar y usar la ruta para actualizar estado de usuario (solo una vez)
 import userStatusRoutes from './routes/userStatus.js';
 app.use(userStatusRoutes(pool));
 
@@ -46,7 +45,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-
 // Endpoint para obtener áreas
 app.get('/areas', async (req, res) => {
   try {
@@ -71,13 +69,6 @@ app.get('/roles', async (req, res) => {
 app.get('/cargos', async (req, res) => {
   try {
     const result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
-    // const { area_id } = req.query;
-    // let result;
-    // if (area_id) {
-    //   result = await pool.query('SELECT id, nombre FROM cargos WHERE area_id = $1 ORDER BY id', [area_id]);
-    // } else {
-    //   result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
-    // }
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener cargos' });
@@ -119,7 +110,7 @@ app.put('/users/:id', async (req, res) => {
 });
 
 // Endpoint para obtener todos los estados
-app.get('/estados', async (req, res) => {
+app.get('/estado', async (req, res) => {
   try {
     const result = await pool.query('SELECT id_estado AS id, nombre_estado AS nombre FROM estado ORDER BY id_estado');
     res.json(result.rows);
@@ -127,7 +118,6 @@ app.get('/estados', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener estados' });
   }
 });
-
 
 // Endpoint para registrar un nuevo usuario
 app.post('/users', async (req, res) => {
@@ -163,8 +153,8 @@ app.get('/users', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT u.id, u.nombres, u.apellidos, u.email, u.telefono, u.dni,
-             c.nombre AS cargo, a.nombre AS area, u.rol_id,
-             u.estado_id, est.nombre_estado AS estado, u.password
+            c.nombre AS cargo, a.nombre AS area, u.rol_id, u.ultimo_acceso,
+            u.estado_id, est.nombre_estado AS estado, u.password
       FROM users u
       LEFT JOIN cargos c ON u.cargo_id = c.id
       LEFT JOIN areas a ON u.area_id = a.id
@@ -181,7 +171,6 @@ app.get('/users', async (req, res) => {
 app.listen(port, () => {
   console.log(`Servidor backend escuchando en puerto ${port}`);
 });
-
 
 // Endpoint para estadísticas del dashboard admin
 app.get('/admin-stats', async (req, res) => {
