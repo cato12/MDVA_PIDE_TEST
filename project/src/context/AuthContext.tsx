@@ -1,14 +1,6 @@
-
-/**
- * Contexto global de autenticación para la aplicación.
- * Provee usuario, login, logout y estado de carga.
- * Simula autenticación con usuarios mock y persistencia local.
- *
- * @module AuthContext
- */
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { isSessionActive as checkSessionActive } from '../utils/session';
-// Definición local de User para reflejar los campos de la base de datos
+
 export interface User {
   id: string;
   nombres: string;
@@ -22,39 +14,22 @@ export interface User {
   isActive: boolean;
 }
 
+type LoginStatus = 'success' | 'suspendido' | 'no_encontrado' | 'contraseña' | 'error';
 
-
-/**
- * Tipado del contexto de autenticación
- */
 type AuthContextType = {
   user: User | null;
-  login: (emailOrDni: string, password: string) => Promise<boolean>;
+  login: (emailOrDni: string, password: string) => Promise<LoginStatus>;
   logout: () => void;
   isLoading: boolean;
   isSessionActive: () => boolean;
 };
 
-
-// Contexto de autenticación
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-
-/**
- * Usuarios simulados para autenticación mock
- */
-// mockUsers eliminado, ahora login es real
-
-
-/**
- * Proveedor global de autenticación.
- * Envuelve la app y expone el contexto a los componentes hijos.
- */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Carga usuario desde localStorage al iniciar
   useEffect(() => {
     const savedUser = localStorage.getItem('municipal_user');
     if (savedUser) {
@@ -63,11 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  /**
-   * Simula login: valida usuario, rol y contraseña ('123456').
-   * Persiste usuario en localStorage.
-   */
-  const login = async (emailOrDni: string, password: string): Promise<boolean> => {
+  const login = async (emailOrDni: string, password: string): Promise<"success" | "suspendido" | "no_encontrado" | "contraseña" | "error"> => {
     setIsLoading(true);
     try {
       const response = await fetch('http://localhost:4000/login', {
@@ -91,27 +62,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         setUser(user);
         localStorage.setItem('municipal_user', JSON.stringify(user));
+        const expiry = Date.now() + 15 * 60 * 1000;
+        localStorage.setItem('mdva_session_expiry', expiry.toString());
         setIsLoading(false);
-        return true;
+        return 'success';
       }
+      if (data.error === 'Cuenta suspendida') return 'suspendido';
+      if (data.error === 'Usuario no encontrado') return 'no_encontrado';
+      if (data.error === 'Contraseña incorrecta') return 'contraseña';
       setIsLoading(false);
-      return false;
+      return 'error';
     } catch (error) {
       setIsLoading(false);
-      return false;
+      return 'error';
     }
   };
 
-  /**
-   * Cierra sesión y limpia usuario de localStorage.
-   */
   const logout = () => {
     setUser(null);
     localStorage.removeItem('municipal_user');
   };
 
-  // Expone si la sesión es activa (token presente)
   const isSessionActive = () => checkSessionActive();
+
   return (
     <AuthContext.Provider value={{ user, login, logout, isLoading, isSessionActive }}>
       {children}
@@ -119,11 +92,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-
-/**
- * Hook para consumir el contexto de autenticación.
- * Lanza error si se usa fuera de AuthProvider.
- */
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {

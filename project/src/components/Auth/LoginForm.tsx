@@ -18,10 +18,6 @@ import { User, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
-/**
- * Componente de formulario de login principal.
- * Permite autenticación y acceso rápido de prueba.
- */
 export function LoginForm() {
   // Estado del formulario de login
   const [formData, setFormData] = useState({
@@ -32,33 +28,68 @@ export function LoginForm() {
   const { login, isLoading } = useAuth();
   const { addToast } = useToast();
 
+  const [attempts, setAttempts] = useState<number>(() => {
+    const saved = localStorage.getItem('loginAttempts');
+    return saved ? parseInt(saved) : 0;
+  });
+  const [isBlocked, setIsBlocked] = useState<boolean>(false);
+
   /**
    * Envía el formulario de login y muestra feedback.
    */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const success = await login(formData.email, formData.password, formData.role);
-    if (success) {
-      addToast('Inicio de sesión exitoso', 'success');
-    } else {
-      addToast('Credenciales inválidas. Use: 123456 como contraseña', 'error');
-    }
-  };
+  // const handleSubmit = async (e: React.FormEvent) => {
+  //   e.preventDefault();
+  //   const success = await login(formData.email, formData.password);
+  //   if (success) {
+  //     addToast('Inicio de sesión exitoso', 'success');
+  //   } else {
+  //     addToast('Credenciales inválidas', 'error');
+  //   }
+  // };
 
-  /**
-   * Autocompleta el login para acceso rápido de demostración.
-   * @param role - Rol a autocompletar
-   */
-  const quickLogin = (role: 'trabajador' | 'administrador') => {
-    const email = role === 'trabajador'
-      ? 'mquispe@municipalidad.gob.pe'
-      : 'cvargas@municipalidad.gob.pe';
-    setFormData({
-      email,
-      password: '123456',
-      role
-    });
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (isBlocked) {
+    addToast('Has superado el número máximo de intentos. Intenta más tarde.', 'error');
+    return;
+  }
+
+  const status = await login(formData.email, formData.password);
+  if (status === 'success') {
+    addToast('Inicio de sesión exitoso', 'success');
+    localStorage.removeItem('loginAttempts');
+    setAttempts(0);
+    return;
+  } 
+  if (status === 'suspendido') {
+    addToast('🛑 Tu cuenta ha sido suspendida.', 'error');
+    addToast('🛑 Contacta a la Oficina de Transformación Digital.', 'error');
+    return;
+  }
+  const newAttempts = attempts + 1;
+  setAttempts(newAttempts);
+  localStorage.setItem('loginAttempts', String(newAttempts));
+  if (status === 'no_encontrado') {
+      addToast('⚠️ Usuario no encontrado. Verifica tu correo o DNI.', 'error');
+  } else if (status === 'contraseña') {
+    addToast(`❌ Contraseña incorrecta (${newAttempts}/3)`, 'error');
+  } else {
+    addToast('Error desconocido al iniciar sesión.', 'error');
+  }
+  if (newAttempts >= 3) {
+    setIsBlocked(true);
+    addToast('Has fallado 3 veces. Acceso bloqueado temporalmente.', 'error');
+      // 🔁 Desbloqueo automático en 5 minutos (opcional)
+    setTimeout(() => {
+      setAttempts(0);
+      setIsBlocked(false);
+      localStorage.removeItem('loginAttempts');
+    }, 5 * 60 * 1000); // 5 min
+  } else {
+    addToast(`Intento fallido (${newAttempts}/3).`, 'error');
+  }
+};
 
   return (
     <div className="min-h-screen bg-[#FFFFF] dark:bg-gradient-to-br dark:from-gray-900 dark:to-gray-800 flex items-center">
@@ -80,79 +111,51 @@ export function LoginForm() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-         
-
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Usuario
             </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <div className="relative group">
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-[#C01702] transition-colors duration-300" />
               <input
                 type="text"
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-0 dark:bg-gray-700 dark:text-white"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[#C01702] focus:ring-2 focus:ring-[#C01702]/30 transition duration-300 dark:bg-gray-700 dark:text-white"
                 placeholder="Ingrese su usuario o ID"
                 required
-                style={{ boxShadow: 'none', borderColor: '#000', borderWidth: '1px' }}
-                onFocus={e => e.currentTarget.style.setProperty('border-color', '#C01702', 'important')}
-                onBlur={e => e.currentTarget.style.setProperty('border-color', '#000', 'important')}
               />
             </div>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Contraseña
             </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <div className="relative group">
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-[#C01702] transition-colors duration-300" />
               <input
                 type="password"
                 value={formData.password}
                 onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                className="w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-0 dark:bg-gray-700 dark:text-white"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[#C01702] focus:ring-2 focus:ring-[#C01702]/30 transition duration-300 dark:bg-gray-700 dark:text-white"
                 placeholder="Ingrese su contraseña"
                 required
-                style={{ boxShadow: 'none', borderColor: '#000', borderWidth: '1px' }}
-                onFocus={e => e.currentTarget.style.setProperty('border-color', '#C01702', 'important')}
-                onBlur={e => e.currentTarget.style.setProperty('border-color', '#000', 'important')}
               />
             </div>
           </div>
-
           <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-          >
-            {isLoading ? 'Iniciando Sesión...' : 'Iniciar Sesión'}
+              type="submit"
+              disabled={isLoading || isBlocked}
+              className="w-full bg-primary-500 hover:bg-primary-600 disabled:bg-gray-400 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+            >
+              {isLoading ? 'Iniciando Sesión...' : 'Iniciar Sesión'}
           </button>
-        </form>
-
-        <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
-          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-3">
-            Acceso rápido de demostración:
-          </p>
-          <div className="space-y-2">
-            <button
-              onClick={() => quickLogin('trabajador')}
-              className="w-full text-left p-2 text-xs bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-            >
-              <strong>Trabajador:</strong> mquispe@municipalidad.gob.pe
-            </button>
-            <button
-              onClick={() => quickLogin('administrador')}
-              className="w-full text-left p-2 text-xs bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
-            >
-              <strong>Administrador:</strong> cvargas@municipalidad.gob.pe
-            </button>
+          <div className="text-center mt-4">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Recuerde que solo tiene 3 intentos para iniciar sesión
+            </span>
           </div>
-          <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-2">
-            Contraseña: 123456
-          </p>
-        </div>
+        </form>
       </div>
         </div>
       </div>

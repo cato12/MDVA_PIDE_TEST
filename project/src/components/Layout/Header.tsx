@@ -42,7 +42,7 @@ export function Header() {
         */}
         <div>
           <h1 className="text-2xl font-bold text-white drop-shadow-sm">
-            Plataforma de Interoperabilidad del Estado | PIDE
+            Sistema Web | PIDE
           </h1>
           <p className="text-sm text-white/80">
             Municipalidad Distrital de Vista Alegre

@@ -16,10 +16,6 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
-import {
-  Users, Search, Filter, Plus, Edit, Trash2, AlertTriangle, ShieldCheck, UserCheck, UserX, Mail, Eye, EyeOff, Calendar
-} from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -56,6 +52,10 @@ const fetchCargos = async (areaId?: string) => {
     return [];
   }
 };
+import {
+  Users, Search, Filter, Plus, Edit, Trash2, AlertTriangle, Shield, ShieldCheck, Eye, EyeOff, UserCheck, UserX, Mail, Phone, Calendar, Building, LogIn, FileText
+} from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 /**
  * Estructura de un usuario del sistema.
@@ -76,33 +76,86 @@ interface Usuario {
   permisos: string[];
   password?: string;
 }
-
 export function UserManagement() {
+  const generarReportePDF = () => {
+    const usersToReport = filteredUsuarios;
+    const doc = new jsPDF('landscape');
+    const img = new Image();
+    img.src = '/imagenes/logo_mdva_rojo.png';
+
+    img.onload = () => {
+      // Logo en encabezado
+      doc.addImage(img, 'PNG', 14, 10, 30, 30); 
+
+      // Título con estilo corporativo
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(192, 23, 2); // color institucional rojo
+      doc.text('Reporte de Usuarios', 50, 25);
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      const fechaHora = new Date().toLocaleString('es-PE');
+      doc.text(`Fecha: ${fechaHora}`, 50, 32);
+      if (usuarioSesion) {
+        doc.text(`Generado por: ${usuarioSesion.nombres} ${usuarioSesion.apellidos} - ${usuarioSesion.email}`, 180, 32);
+      }
+      // Cuerpo de tabla
+      const cols = ['Nombre', 'DNI', 'Correo', 'Teléfono', 'Cargo', 'Área', 'Rol', 'Estado'];
+      const rows = usersToReport.map(u => [
+        `${u.nombres} ${u.apellidos}`,
+        u.dni,
+        u.email,
+        u.telefono || '—',
+        u.cargo || '—',
+        u.area || '—',
+        u.role ? capitalize(u.role) : 'Sin Rol',
+        u.estado ? capitalize(u.estado) : 'Desconocido'
+      ]);
+
+      autoTable(doc, {
+        startY: 45,
+        head: [cols],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [192, 23, 2], halign: 'center' },
+        styles: { fontSize: 9, cellPadding: 3 },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 50 },
+          3: { cellWidth: 25 }
+        }
+      });
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+
+        doc.setFontSize(9);
+        doc.setTextColor(150);
+
+        // Texto centrado (institución)
+        doc.text('Municipalidad Distrital De Vista Alegre - Sistema MDVA', pageWidth / 2, pageHeight - 10, { align: 'center' });
+
+        // Número de página (a la derecha)
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
+      }
+      const fecha = new Date().toISOString().split('T')[0];
+      doc.save(`usuarios_${fecha}.pdf`);
+    };
+  };
+
+  // Util: capitalizar string
+  function capitalize(str: string) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+  
   // Estado de usuarios y filtros
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [totalUsuariosDB, setTotalUsuariosDB] = useState<number>(0);
   const { user: usuarioSesion } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('todos');
-  const [roleFilter, setRoleFilter] = useState('todos');
-  const [estados, setEstados] = useState<{ id: number; nombre: string }[]>([]);
-  const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
-  const [showUserModal, setShowUserModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [password, setPassword] = useState('');
-  // Estados para áreas, roles y cargos
-  const [areas, setAreas] = useState<any[]>([]);
-  const [roles, setRoles] = useState<{ id: number; nombre: string }[]>([]);
-  const [cargos, setCargos] = useState<{ id: number; nombre: string }[]>([]);
-  const [selectedAreaId, setSelectedAreaId] = useState<string>('');
-  const [selectedCargoId, setSelectedCargoId] = useState<string>('');
-  const [selectedRolId, setSelectedRolId] = useState<string>('');
-  const formRef = useRef<HTMLFormElement | null>(null);
-  const { addToast } = useToast();
-  const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-
   // Cargar usuarios desde el backend al montar el componente
   useEffect(() => {
     const fetchUsuarios = async () => {
@@ -119,7 +172,8 @@ export function UserManagement() {
         };
         setUsuarios(data.map((u: any) => ({
           ...u,
-          role: mapRol(u.rol_id)
+          role: mapRol(u.rol_id),
+          ultimoAcceso: u.ultimo_acceso,
         })));
         setTotalUsuariosDB(Array.isArray(data) ? data.length : 0);
       } catch {
@@ -129,7 +183,18 @@ export function UserManagement() {
     };
     fetchUsuarios();
   }, []);
-
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('todos');
+  const [roleFilter, setRoleFilter] = useState('todos');
+  const [estados, setEstados] = useState<{ id: number; nombre: string }[]>([]);
+  const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] = useState('');
+  // Estados para áreas, roles y cargos
+  const [areas, setAreas] = useState<any[]>([]);
+  const [roles, setRoles] = useState<{ id: number; nombre: string }[]>([]);
   // Cargar roles para el filtro al montar el componente
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/roles`)
@@ -137,7 +202,17 @@ export function UserManagement() {
       .then(data => setRoles(Array.isArray(data) ? data : []))
       .catch(() => setRoles([]));
   }, []);
+  const [cargos, setCargos] = useState<{ id: number; nombre: string }[]>([]);
+  const [selectedAreaId, setSelectedAreaId] = useState<string>('');
+  const [selectedCargoId, setSelectedCargoId] = useState<string>('');
+  const [selectedRolId, setSelectedRolId] = useState<string>('');
+  // Referencia al formulario para obtener valores de manera segura
 
+  const [telefono, setTelefono] = useState(selectedUser?.telefono || '');
+  const [dni, setDni] = useState(selectedUser?.dni || '');
+
+  const formRef = useRef<HTMLFormElement | null>(null);
+  // Cargar áreas, roles y cargos al abrir el modal de usuario
   // Cargar estados para los filtros al montar el componente
   useEffect(() => {
     fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/estado`)
@@ -145,18 +220,18 @@ export function UserManagement() {
       .then(data => setEstados(Array.isArray(data) ? data : []))
       .catch(() => setEstados([]));
   }, []);
-
-  // Cargar áreas, roles y cargos al abrir el modal de usuario
   useEffect(() => {
     if (showUserModal) {
       fetchAreas().then(data => {
         setAreas(data);
+        // Si hay un usuario seleccionado, buscar cargos de su área
         if (selectedUser && data.length) {
           const areaObj = data.find((a: any) => a.nombre === selectedUser.area);
           if (areaObj) {
             setSelectedAreaId(areaObj.id);
             fetchCargos(areaObj.id).then(cgs => {
               setCargos(cgs);
+              // Buscar el cargo por nombre y setear el id
               const cargoObj = cgs.find((c: any) => c.nombre === selectedUser.cargo);
               if (cargoObj) setSelectedCargoId(cargoObj.id);
             });
@@ -164,7 +239,7 @@ export function UserManagement() {
             setCargos([]);
           }
         } else {
-          setCargos([]);
+          fetchCargos().then(cgs => setCargos(Array.isArray(cgs) ? cgs : []));
         }
       });
       fetchRoles().then(data => {
@@ -186,6 +261,7 @@ export function UserManagement() {
   useEffect(() => {
     if (showUserModal) {
       fetchCargos().then((data) => {
+        // Asegurarse de que los datos sean del tipo correcto
         if (Array.isArray(data)) {
           setCargos(data.filter((c) => c && c.id && c.nombre));
         } else {
@@ -194,28 +270,19 @@ export function UserManagement() {
       });
     }
   }, [showUserModal]);
-
-  // Sincronizar el campo contraseña cada vez que se selecciona un usuario para editar y se abre el modal
-  useEffect(() => {
-    if (showUserModal) {
-      if (selectedUser && isEditing) {
-        setPassword(selectedUser.password ?? '');
-      } else if (!selectedUser && !isEditing) {
-        setPassword('');
-      }
-    }
-  }, [showUserModal, selectedUser, isEditing]);
+  const { addToast } = useToast();
+  const [userToDelete, setUserToDelete] = useState<Usuario | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   /**
    * Elimina un usuario del sistema.
    * @param userId - ID del usuario a eliminar
    */
+
   const deleteUser = async (userId: string) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${userId}/estado`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado: 'eliminado' })
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${userId}`, {
+        method: 'DELETE'
       });
       if (res.ok) {
         setUsuarios((prev: Usuario[]) => prev.filter((user: Usuario) => user.id !== userId));
@@ -235,6 +302,7 @@ export function UserManagement() {
    */
   const normalize = (str = '') => str.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, '').toLowerCase();
   const filteredUsuarios = usuarios.filter(user => {
+    // No mostrar usuarios eliminados
     const estadoUser = (user.estado || '').toString().trim().toLowerCase();
     if (estadoUser === 'eliminado') return false;
     const matchesSearch =
@@ -243,8 +311,10 @@ export function UserManagement() {
       (user.email?.toLowerCase().includes(searchTerm.toLowerCase()) || '') ||
       (user.dni?.includes(searchTerm) || '');
     const matchesStatus = statusFilter === 'todos' || estadoUser === statusFilter.toLowerCase();
+    // El filtro de rol compara el nombre real del rol, ignorando mayúsculas y espacios
+    // Buscar el nombre real del rol usando rol_id si existe, si no, usar user.role
     let userRoleName = '';
-    if ('rol_id' in user && (user as any).rol_id !== undefined) {
+    if ('rol_id' in user && user.rol_id !== undefined) {
       userRoleName = roles.find(r => r.id === (user as any).rol_id)?.nombre || '';
     }
     if (!userRoleName) userRoleName = user.role || '';
@@ -257,11 +327,13 @@ export function UserManagement() {
    * @param estado - Estado del usuario
    */
   const getStatusBadge = (estado: string) => {
+    // Normalizar el estado recibido del backend
     const estadoNorm = (estado || '').toLowerCase();
     let key: 'activo' | 'suspendido' | 'eliminado' = 'eliminado';
     if (estadoNorm === 'activo') key = 'activo';
     else if (estadoNorm === 'suspendido') key = 'suspendido';
     else if (estadoNorm === 'eliminado') key = 'eliminado';
+    // Colores y etiquetas
     const colors = {
       activo: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
       suspendido: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
@@ -283,21 +355,26 @@ export function UserManagement() {
    * Devuelve el badge visual para el rol del usuario.
    * @param role - Rol del usuario
    */
+  // Badge de rol: color según valor normalizado, texto según nombre real de la base de datos
   const getRoleBadge = (role: string, rol_id?: any) => {
+    // Buscar el nombre real del rol en roles
     let realName = '';
     if (rol_id !== undefined) {
       realName = roles.find(r => r.id === rol_id)?.nombre || '';
     }
     if (!realName) {
+      // Si no hay rol_id, intentar buscar por nombre normalizado
       const found = roles.find(r => r.nombre && r.nombre.toLowerCase() === role?.toLowerCase());
       realName = found?.nombre || role;
     }
+    // Colores según valor normalizado
     const colorMap: Record<string, string> = {
       usuario: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-      trabajador: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      trabajador: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300', // por compatibilidad
       administrador: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
       jefe_area: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
     };
+    // Normalizar para color
     const colorKey = (realName || role || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, '').toLowerCase();
     const color = colorMap[colorKey] || 'bg-gray-200 text-gray-700';
     return (
@@ -311,23 +388,35 @@ export function UserManagement() {
    * Activa o desactiva un usuario.
    * @param userId - ID del usuario
    */
+  // Cambia el estado del usuario entre 'activo' y 'suspendido' en la base de datos y en el frontend
   const toggleUserStatus = async (userId: string) => {
     const user = usuarios.find(u => u.id === userId);
     if (!user) return;
     const nuevoEstado = (user.estado || '').toLowerCase() === 'activo' ? 'suspendido' : 'activo';
+    // 1. Actualización optimista
+    setUsuarios(prev =>
+      prev.map(u => u.id === userId ? { ...u, estado: nuevoEstado } : u)
+    );
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${userId}/estado`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estado: nuevoEstado })
       });
-      if (res.ok) {
-        setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, estado: nuevoEstado } : u));
-        addToast(`Usuario ${nuevoEstado === 'activo' ? 'activado' : 'suspendido'} correctamente`, 'success');
-      } else {
+      if (!res.ok) {
+        // Si falló, deshacer la actualización optimista
+        setUsuarios(prev =>
+          prev.map(u => u.id === userId ? { ...u, estado: user.estado } : u)
+        );
         addToast('No se pudo cambiar el estado del usuario', 'error');
+      } else {
+        addToast(`Usuario ${nuevoEstado === 'activo' ? 'activado' : 'suspendido'} correctamente`, 'success');
       }
     } catch {
+      // Deshacer si hay error de red
+      setUsuarios(prev =>
+        prev.map(u => u.id === userId ? { ...u, estado: user.estado } : u)
+      );
       addToast('Error de red al cambiar estado', 'error');
     }
   };
@@ -342,80 +431,31 @@ export function UserManagement() {
       setIsEditing(true);
       setSelectedAreaId('');
       setSelectedCargoId(user.cargo || '');
+      setDni(user.dni || '');
+      setTelefono(user.telefono || '');
     } else {
       setSelectedUser(null);
       setIsEditing(false);
       setSelectedAreaId('');
       setSelectedCargoId('');
+      setSelectedRolId('');
+      setDni('');
+      setTelefono('');
     }
     setShowUserModal(true);
   };
 
-  // Util: capitalizar string
-  function capitalize(str: string) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
-
-  // Generar reporte PDF
-  const generarReportePDF = () => {
-    const doc = new jsPDF('landscape');
-    const img = new Image();
-    img.src = '/imagenes/logo_mdva_rojo.png';
-
-    img.onload = () => {
-      doc.addImage(img, 'PNG', 14, 10, 30, 30);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(18);
-      doc.setTextColor(192, 23, 2);
-      doc.text('Reporte de Usuarios', 50, 25);
-      doc.setFontSize(11);
-      doc.setTextColor(100);
-      const fechaHora = new Date().toLocaleString('es-PE');
-      doc.text(`Fecha: ${fechaHora}`, 50, 32);
-      if (usuarioSesion) {
-        doc.text(`Generado por: ${usuarioSesion.nombres} ${usuarioSesion.apellidos} - ${usuarioSesion.email}`, 180, 32);
+  // Sincronizar el campo contraseña cada vez que se selecciona un usuario para editar y se abre el modal
+  useEffect(() => {
+    if (showUserModal) {
+      if (selectedUser && isEditing) {
+        // Si el usuario tiene password, úsalo; si no, pon cadena vacía
+        setPassword(selectedUser.password ?? '');
+      } else if (!selectedUser && !isEditing) {
+        setPassword('');
       }
-      const cols = ['Nombre', 'DNI', 'Correo', 'Teléfono', 'Cargo', 'Área', 'Rol', 'Estado'];
-      const usersToReport = filteredUsuarios;
-      const rows = usersToReport.map(u => [
-        `${u.nombres} ${u.apellidos}`,
-        u.dni,
-        u.email,
-        u.telefono || '—',
-        u.cargo || '—',
-        u.area || '—',
-        u.role ? capitalize(u.role) : 'Sin Rol',
-        u.estado ? capitalize(u.estado) : 'Desconocido'
-      ]);
-      autoTable(doc, {
-        startY: 45,
-        head: [cols],
-        body: rows,
-        theme: 'grid',
-        headStyles: { fillColor: [192, 23, 2], halign: 'center' },
-        styles: { fontSize: 9, cellPadding: 3 },
-        alternateRowStyles: { fillColor: [245, 245, 245] },
-        columnStyles: {
-          0: { cellWidth: 40 },
-          1: { cellWidth: 20 },
-          2: { cellWidth: 50 },
-          3: { cellWidth: 25 }
-        }
-      });
-      const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const pageHeight = doc.internal.pageSize.getHeight();
-        doc.setFontSize(9);
-        doc.setTextColor(150);
-        doc.text('Municipalidad Distrital De Vista Alegre - Sistema MDVA', pageWidth / 2, pageHeight - 10, { align: 'center' });
-        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 20, pageHeight - 10, { align: 'right' });
-      }
-      const fecha = new Date().toISOString().split('T')[0];
-      doc.save(`usuarios_${fecha}.pdf`);
-    };
-  };
+    }
+  }, [showUserModal, selectedUser, isEditing]);
 
   return (
     <div className="space-y-10">
@@ -429,15 +469,23 @@ export function UserManagement() {
           </p>
           <div className="h-1 w-16 bg-[#C01702] rounded mt-3" />
         </div>
-        <button
-          onClick={() => openUserModal()}
-          className="bg-[#C01702] hover:bg-[#a31200] text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow transition-colors font-semibold"
-        >
-          <Plus className="h-5 w-5" />
-          Nuevo Usuario
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => openUserModal()}
+            className="bg-[#C01702] hover:bg-[#a31200] text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow transition-colors font-semibold"
+          >
+            <Plus className="h-5 w-5" />
+            Nuevo Usuario
+          </button>
+          <button
+            onClick={generarReportePDF}
+            className="bg-white border border-[#C01702] text-[#C01702] hover:bg-[#C01702] hover:text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow transition-colors font-semibold"
+          >
+            <FileText className="h-5 w-5" />
+            Reporte PDF
+          </button>
+        </div>
       </div>
-
       {/* Estadísticas rápidas */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center">
@@ -494,7 +542,7 @@ export function UserManagement() {
                 className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:text-white"
               >
                 <option value="todos">Todos los estados</option>
-                {(Array.isArray(estados) ? estados : []).filter((e: { nombre: string }) => (e.nombre || '').toLowerCase() !== 'eliminado').map((estado: { id: number, nombre: string }) => (
+                {(Array.isArray(estados) ? estados : []).filter((e: {nombre: string}) => (e.nombre || '').toLowerCase() !== 'eliminado').map((estado: {id: number, nombre: string}) => (
                   <option key={estado.id} value={estado.nombre.toLowerCase()}>{estado.nombre.charAt(0).toUpperCase() + estado.nombre.slice(1).toLowerCase()}</option>
                 ))}
               </select>
@@ -580,9 +628,28 @@ export function UserManagement() {
                     {getStatusBadge((usuario.estado || '').toLowerCase())}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      {usuario.ultimoAcceso ? new Date(usuario.ultimoAcceso).toLocaleDateString('es-PE') : '—'}
+                      {(() => {
+                        if (!usuario.ultimoAcceso) {
+                          return <span className="text-red-500 font-medium">Nunca</span>;
+                        }
+                        const accesoDate = new Date(usuario.ultimoAcceso);
+                        const hoy = new Date();
+                        const diffDias = Math.floor((hoy.getTime() - accesoDate.getTime()) / (1000 * 60 * 60 * 24));
+
+                        const estilo =
+                          diffDias === 0 ? 'text-green-600 font-semibold'
+                          : diffDias <= 3 ? 'text-yellow-500'
+                          : 'text-gray-500';
+
+                        const fechaFormateada = accesoDate.toLocaleDateString('es-PE', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        });
+
+                        return <span className={estilo}>{fechaFormateada}</span>;
+                      })()}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -597,17 +664,17 @@ export function UserManagement() {
                       <button
                         onClick={() => toggleUserStatus(usuario.id)}
                         className={`$
-                            {(usuario.estado || '').toLowerCase() === 'activo'
-                              ? 'text-green-600 hover:text-green-900 dark:text-green-400'
-                              : 'text-red-600 hover:text-red-900 dark:text-red-400'}
-                          }`}
+                          {(usuario.estado || '').toLowerCase() === 'activo'
+                            ? 'text-green-600 hover:text-green-900 dark:text-green-400'
+                            : 'text-red-600 hover:text-red-900 dark:text-red-400'}
+                        }`}
                         title={(usuario.estado || '').toLowerCase() === 'activo' ? 'Suspender usuario' : 'Activar usuario'}
                       >
                         {(usuario.estado || '').toLowerCase() === 'activo'
                           ? <Eye className="h-4 w-4 text-green-600" />
                           : <EyeOff className="h-4 w-4 text-red-600" />}
                       </button>
-
+                      
                       <button
                         onClick={() => { setUserToDelete(usuario); setShowDeleteModal(true); }}
                         className="text-gray-400 hover:text-[#C01702] dark:hover:text-[#C01702] focus:outline-none focus:ring-2 focus:ring-[#C01702] rounded transition"
@@ -617,36 +684,36 @@ export function UserManagement() {
                         <Trash2 className="h-4 w-4" />
                       </button>
                       {/* Icono de iniciar sesión eliminado por requerimiento */}
-                      {/* Modal de confirmación de eliminación (fuera del mapeo de la tabla) */}
-                      {showDeleteModal && userToDelete && (
-                        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
-                          <div className="bg-[#C01702] rounded-2xl max-w-md w-full border-2 border-[#C01702] shadow-2xl p-7 relative">
-                            <button
-                              onClick={() => { setShowDeleteModal(false); setUserToDelete(null); }}
-                              className="absolute top-3 right-3 text-white hover:text-gray-200 text-2xl font-bold focus:outline-none"
-                              aria-label="Cerrar modal"
-                            >
-                              ×
-                            </button>
-                            <div className="flex flex-col items-center justify-center mb-4">
-                              <AlertTriangle className="h-20 w-20 text-white mb-2" />
-                            </div>
-                            <p className="text-white mb-7 text-base text-center break-words max-w-xs sm:max-w-sm md:max-w-md mx-auto">
-                              ¿Estás seguro de que deseas eliminar al usuario<br />
-                              <span className="font-semibold break-words">{userToDelete.nombres} {userToDelete.apellidos}</span>?<br />
-                            </p>
-                            <div className="flex justify-center">
-                              <button
-                                onClick={() => deleteUser(userToDelete.id)}
-                                className="px-8 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-xl font-bold shadow flex items-center gap-3 text-lg border-2 border-white transition"
-                                autoFocus
-                              >
-                                Eliminar
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+      {/* Modal de confirmación de eliminación (fuera del mapeo de la tabla) */}
+      {showDeleteModal && userToDelete && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-[#C01702] rounded-2xl max-w-md w-full border-2 border-[#C01702] shadow-2xl p-7 relative">
+            <button
+              onClick={() => { setShowDeleteModal(false); setUserToDelete(null); }}
+              className="absolute top-3 right-3 text-white hover:text-gray-200 text-2xl font-bold focus:outline-none"
+              aria-label="Cerrar modal"
+            >
+              ×
+            </button>
+            <div className="flex flex-col items-center justify-center mb-4">
+              <AlertTriangle className="h-20 w-20 text-white mb-2" />
+            </div>
+            <p className="text-white mb-7 text-base text-center break-words max-w-xs sm:max-w-sm md:max-w-md mx-auto">
+              ¿Estás seguro de que deseas eliminar al usuario<br />
+              <span className="font-semibold break-words">{userToDelete.nombres} {userToDelete.apellidos}</span>?<br />
+            </p>
+            <div className="flex justify-center">
+              <button
+                onClick={() => deleteUser(userToDelete.id)}
+                className="px-8 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-xl font-bold shadow flex items-center gap-3 text-lg border-2 border-white transition"
+                autoFocus
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
                     </div>
                   </td>
                 </tr>
@@ -673,7 +740,7 @@ export function UserManagement() {
                 ×
               </button>
             </div>
-            <form className="px-6 py-6" ref={formRef}>
+                <form className="px-6 py-6" ref={formRef}>
               {/* Datos personales y laborales agrupados en dos columnas en md+ */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
                 <div>
@@ -703,7 +770,11 @@ export function UserManagement() {
                   <input
                     type="text"
                     name="dni"
-                    defaultValue={selectedUser?.dni || ''}
+                    value={dni}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^\d{0,8}$/.test(value)) setDni(value);
+                    }}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
                     placeholder="DNI"
                     aria-label="DNI"
@@ -725,7 +796,11 @@ export function UserManagement() {
                   <input
                     type="tel"
                     name="telefono"
-                    defaultValue={selectedUser?.telefono || ''}
+                    value={telefono}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (/^\d{0,9}$/.test(value)) setTelefono(value);
+                    }}
                     className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
                     placeholder="Teléfono"
                     aria-label="Teléfono"
@@ -802,80 +877,128 @@ export function UserManagement() {
                   </select>
                 </div>
               </div>
-              <div className="flex justify-center mt-4">
-                <button
-                  type="submit"
-                  onClick={async e => {
-                    e.preventDefault();
-                    if (!formRef.current) return;
-                    const formData = new FormData(formRef.current);
-                    const nombre = (formData.get('nombre') || '').toString().trim();
-                    const apellidos = (formData.get('apellidos') || '').toString().trim();
-                    const dni = (formData.get('dni') || '').toString().trim();
-                    const email = (formData.get('email') || '').toString().trim();
-                    const telefono = (formData.get('telefono') || '').toString().trim();
-                    const passwordValue = password;
-                    if (!nombre || !apellidos || !dni || !email || !telefono || !selectedAreaId || !selectedCargoId || !selectedRolId) {
-                      addToast('Completa todos los campos obligatorios', 'error');
-                      return;
-                    }
-                    const userPayload = {
-                      nombres: nombre,
-                      apellidos,
-                      email,
-                      telefono,
-                      dni,
-                      cargo_id: selectedCargoId,
-                      rol_id: selectedRolId,
-                      area_id: selectedAreaId
-                    };
-                    if (!isEditing) {
-                      // Crear usuario
-                      const createPayload = { ...userPayload, password: passwordValue };
-                      try {
-                        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(createPayload)
-                        });
-                        if (res.ok) {
-                          addToast('Usuario creado correctamente', 'success');
-                          setShowUserModal(false);
-                        } else {
-                          const data = await res.json();
-                          addToast(data.error || 'Error al crear usuario', 'error');
-                        }
-                      } catch {
-                        addToast('Error de red al crear usuario', 'error');
+                <div className="flex justify-center mt-4">
+                  <button
+                    type="submit"
+                    onClick={async e => {
+                      e.preventDefault();
+                      if (!formRef.current) return;
+                      const formData = new FormData(formRef.current);
+                      const nombre = (formData.get('nombre') || '').toString().trim();
+                      const apellidos = (formData.get('apellidos') || '').toString().trim();
+                      const dni = (formData.get('dni') || '').toString().trim();
+                      const email = (formData.get('email') || '').toString().trim();
+                      const telefono = (formData.get('telefono') || '').toString().trim();
+                      const passwordValue = password;
+                      if (!nombre || !apellidos || !dni || !email || !telefono || !selectedAreaId || !selectedCargoId || !selectedRolId) {
+                        addToast('Completa todos los campos obligatorios', 'error');
+                        return;
                       }
-                    } else {
-                      // Editar usuario existente
-                      try {
-                        const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${selectedUser?.id}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ ...userPayload, password: passwordValue })
-                        });
-                        if (res.ok) {
-                          addToast('Usuario actualizado correctamente', 'success');
-                          setShowUserModal(false);
-                          // Actualizar usuario en el frontend
-                          setUsuarios(prev => prev.map(u => u.id === selectedUser?.id ? { ...u, ...userPayload, password: passwordValue } : u));
-                        } else {
-                          const data = await res.json();
-                          addToast(data.error || 'Error al actualizar usuario', 'error');
-                        }
-                      } catch {
-                        addToast('Error de red al actualizar usuario', 'error');
+                      if (dni.length !== 8 || !/^\d{8}$/.test(dni)) {
+                        addToast('El DNI debe tener exactamente 8 dígitos numéricos', 'error');
+                        return;
                       }
-                    }
-                  }}
-                  className="px-6 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold text-base transition focus:outline-none focus:ring-2 focus:ring-[#C01702] flex items-center gap-2 shadow-none"
-                >
-                  <UserCheck className="h-5 w-5 text-white" />
-                  {isEditing ? 'Actualizar' : 'Crear'} Usuario
-                </button>
-              </div>
+                      if (telefono.length < 7 || telefono.length > 9 || !/^\d+$/.test(telefono)) {
+                        addToast('El teléfono debe tener entre 7 y 9 dígitos numéricos', 'error');
+                        return;
+                      }
+                      const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+$/;
+                      if (!nombreRegex.test(nombre)) {
+                        addToast('El nombre solo debe contener letras y espacios', 'error');
+                        return;
+                      }
+                      if (!nombreRegex.test(apellidos)) {
+                        addToast('El apellido solo debe contener letras y espacios', 'error');
+                        return;
+                      }
+                      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                      if (!emailRegex.test(email)) {
+                        addToast('Correo electrónico no válido', 'error');
+                        return;
+                      }
+                      const userPayload = {
+                        nombres: nombre,
+                        apellidos,
+                        email,
+                        telefono,
+                        dni,
+                        cargo_id: selectedCargoId,
+                        rol_id: selectedRolId,
+                        area_id: selectedAreaId
+                      };
+                      if (!isEditing) {
+                        // Crear usuario
+                        const createPayload = { ...userPayload, password: passwordValue };
+                        setShowUserModal(false);
+                        try {
+                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(createPayload)
+                          });
+                          if (res.ok) {
+                            const responseData = await res.json();
+                            const newUser = responseData.user;
+                            const cargoNombre = cargos.find(c => String(c.id) === String(selectedCargoId))?.nombre ?? '';
+                            const areaNombre = areas.find(a => String(a.id) === String(selectedAreaId))?.nombre ?? '';
+                            const rolNombre = roles.find(r => String(r.id) === String(selectedRolId))?.nombre.toLowerCase() as Usuario['role'];
+                            const usuarioAgregado: Usuario = {
+                              id: String(newUser.id),
+                              nombres: nombre,
+                              apellidos,
+                              email,
+                              telefono,
+                              dni,
+                              cargo: cargoNombre,
+                              area: areaNombre,
+                              role: rolNombre,
+                              estado: 'activo',
+                              fechaIngreso: '',
+                              ultimoAcceso: '',
+                              permisos: [],
+                              password: passwordValue
+                            };
+                            setUsuarios(prev => [...prev, usuarioAgregado]);
+                            setDni('');
+                            setTelefono('');
+                            setPassword('');
+                            setShowUserModal(false);
+                            addToast('Usuario creado correctamente', 'success');
+                          } else {
+                            const data = await res.json();
+                            addToast(data.error || 'Error al crear usuario', 'error');
+                          }
+                        } catch {
+                          addToast('Error de red al crear usuario', 'error');
+                        }
+                      } else {
+                        // Editar usuario existente
+                        try {
+                          const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${selectedUser?.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...userPayload, password: passwordValue })
+                          });
+                          if (res.ok) {
+                            addToast('Usuario actualizado correctamente', 'success');
+                            setShowUserModal(false);
+                            // Actualizar usuario en el frontend
+                            setUsuarios(prev => prev.map(u => u.id === selectedUser?.id ? { ...u, ...userPayload, password: passwordValue } : u));
+                          } else {
+                            const data = await res.json();
+                            addToast(data.error || 'Error al actualizar usuario', 'error');
+                          }
+                        } catch {
+                          addToast('Error de red al actualizar usuario', 'error');
+                        }
+                      }
+                    }}
+                    className="px-6 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold text-base transition focus:outline-none focus:ring-2 focus:ring-[#C01702] flex items-center gap-2 shadow-none"
+                  >
+                    <UserCheck className="h-5 w-5 text-white" />
+                    {isEditing ? 'Actualizar' : 'Crear'} Usuario
+                  </button>
+                </div>
             </form>
           </div>
         </div>

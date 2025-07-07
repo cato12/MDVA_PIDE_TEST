@@ -27,8 +27,9 @@ import {
   Power      // Icono de cerrar sesión
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext'; // Contexto de autenticación
-
 import logoMDVA from '/imagenes/logo_mdva_rojo.png'; // Logo institucional
+
+const SESSION_KEY = 'mdva_session_expiry';
 
 // Menú para trabajadores (acceso limitado)
 const trabajadorMenuItems = [
@@ -40,7 +41,7 @@ const trabajadorMenuItems = [
 // Menú para administradores (acceso completo)
 const adminMenuItems = [
   { path: '/admin/dashboard', label: 'Panel Administrativo', icon: Home },
-  { path: '/admin/usuarios', label: 'Gestión de Usuarios', icon: Users }
+  { path: '/admin/usuarios', label: 'Gestión de Usuarios', icon: Users },
   // { path: '/admin/logs', label: 'Monitoreo del Sistema', icon: Activity }
 ];
 
@@ -54,13 +55,41 @@ export function Sidebar() {
    * Estado: timer de sesión (15 minutos, en segundos).
    * Se reinicia cada vez que el usuario interactúa.
    */
-  const [timeLeft, setTimeLeft] = useState(15 * 60);
-  useEffect(() => {
-    if (timeLeft <= 0) return;
-    const interval = setInterval(() => setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0)), 1000);
-    return () => clearInterval(interval);
-  }, [timeLeft]);
+  const { user, logout } = useAuth();
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    const stored = localStorage.getItem(SESSION_KEY);
+    if (stored) {
+      const expiry = Number(stored);
+      return Math.max(Math.floor((expiry - Date.now()) / 1000), 0);
+    }
+    const expiry = Date.now() + 15 * 60 * 1000;
+    localStorage.setItem(SESSION_KEY, expiry.toString());
+    return 15 * 60;
+  });
 
+    useEffect(() => {
+    if (timeLeft <= 0) {
+      logout();
+      localStorage.removeItem(SESSION_KEY);
+      return;
+    }
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        const next = prev - 1;
+        if (next <= 0) {
+          clearInterval(interval);
+          logout();
+          localStorage.removeItem(SESSION_KEY);
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [timeLeft, logout]);
+
+  
+  
   /**
    * Formatea segundos a mm:ss para mostrar el timer.
    * @param seconds - Segundos restantes
@@ -72,7 +101,7 @@ export function Sidebar() {
    * Obtiene usuario autenticado y función de logout del contexto global.
    * El menú se determina según el rol ('administrador' o 'trabajador').
    */
-  const { user, logout } = useAuth();
+  
   const menuItems = user?.rol === 'administrador' ? adminMenuItems : trabajadorMenuItems;
 
   return (
