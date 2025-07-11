@@ -13,10 +13,50 @@ const userStatusRoutes = (pool) => {
     }
 
     try {
+
+ //Modificacion Logs de Auditoria - Registro de eliminacion de usuario (09/07/2025) ------ INICIO -----      
+      // Obtener usuario antes del cambio
+      const prevResult = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+      if (prevResult.rowCount === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+      const prev = prevResult.rows[0];
+    //Modificacion Logs de Auditoria - Registro de eliminacion de usuario (09/07/2025) ------ FIN -----    
+
       // Obtener usuario actual
       const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
       if (userResult.rows.length === 0) {
         return res.status(404).json({ error: 'Usuario no encontrado' });
+
+      //Modificacion Logs de Auditoria - Registro de eliminacion de usuario (09/07/2025) ------ INICIO -----    
+      const updated = result.rows[0];
+
+      // Registrar en audit_logs
+      let ip = req.headers['x-forwarded-for']?.toString().split(',').shift() || req.socket?.remoteAddress || req.ip || '';
+      if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+      let accion = '';
+      let descripcion = '';
+      if (estado_id === 2) {
+        accion = 'Usuario Suspendido';
+        descripcion = `Usuario suspendido temporalmente`;
+      } else if (estado_id === 1) {
+        accion = 'Usuario Activado';
+        descripcion = `Usuario activado recientemente`;
+      }
+      await pool.query(
+        `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+        [
+          prev.email || prev.dni || '',
+          accion,
+          'usuarios',
+          descripcion,
+          ip,
+          'exitoso',
+          JSON.stringify({ antes: prev.estado_id, despues: estado_id })
+        ]
+      );
+      res.json({ success: true, user: updated });
+    //Modificacion Logs de Auditoria - Registro de eliminacion de usuario (09/07/2025) ------ FIN -----    
+
       }
       const user = userResult.rows[0];
 

@@ -1,428 +1,3 @@
-// import express from 'express';
-// import cors from 'cors';
-// import dotenv from 'dotenv';
-// import { Pool } from 'pg';
-// import { sendEmail } from './utils/mailer.js';
-// import { recordFailedAttempt, resetAttempts } from './utils/loginAttempts.js';
-// import bcrypt from 'bcrypt';
-// import PasswordValidator from 'password-validator';
-// import schema from './utils/passwordPolicy.js';
-
-// schema
-//   .is().min(8)
-//   .is().max(100)
-//   .has().uppercase()
-//   .has().lowercase()
-//   .has().digits(1)
-//   .has().symbols()
-//   .has().not().spaces()
-
-// dotenv.config();
-// const app = express();
-// const port = process.env.PORT || 4000;
-// app.use(cors());
-// app.use(express.json());
-// const pool = new Pool({
-//   connectionString: process.env.DATABASE_URL,
-// });
-// import userStatusRoutes from './routes/userStatus.js';
-// app.use(userStatusRoutes(pool));
-// app.post('/login', async (req, res) => {
-//   const { emailOrDni, password } = req.body;
-//   if (!emailOrDni || !password) {
-//     return res.status(400).json({ error: 'Faltan credenciales' });
-//   }
-//   try {
-//     const userRes = await pool.query(
-//       `SELECT u.id, u.nombres, u.apellidos, u.dni, u.email, u.telefono,
-//               u.password,
-//               c.nombre AS cargo_nombre,
-//               a.nombre AS area_nombre,
-//               LOWER(r.nombre) AS rol
-//        FROM users u
-//        LEFT JOIN cargos c ON u.cargo_id = c.id
-//        LEFT JOIN areas a ON u.area_id = a.id
-//        LEFT JOIN roles r ON u.rol_id = r.id
-//        WHERE u.email = $1 OR u.dni = $1`,
-//       [emailOrDni]
-//     );
-//     const user = userRes.rows[0];
-//     const match = await bcrypt.compare(password, user.password);
-//     if (!user || !match) {
-//       const fails = await recordFailedAttempt(emailOrDni);
-//       console.log(`🛑 Intento fallido para ${emailOrDni} — Total en 15min: ${fails}`);
-//       if (fails >= 3 && user) {
-//         await sendEmail({
-//           to: user.email,
-//           subject: 'Alerta: Intentos fallidos de acceso',
-//           html: `
-//             <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
-//               <div style="background-color:rgb(255, 202, 195); padding: 20px; text-align: center;">
-//                 <img src="https://i.pinimg.com/736x/8b/7d/ff/8b7dff72f53c290933f1e652b326d8d2.jpg" alt="MDVA Logo" style="height: 50px;" />
-//               </div>
-//               <div style="padding: 20px;">
-//                 <h2 style="color: #C01702;">Alerta de Seguridad</h2>
-//                 <p>Hola <strong>${user.nombres}</strong>,</p>
-//                 <p>Se han registrado <strong>${fails}</strong> intentos fallidos de inicio de sesión en tu cuenta en los últimos 15 minutos.</p>
-//                 <p>Si no reconoces estos accesos, puedes contactar con la Oficina de Transformación Digital.</p>
-//                 <p style="font-size: 12px; color: #666;">Este mensaje es automático, por favor no lo respondas.</p>
-//               </div>
-//               <div style="background-color: #f5f5f5; padding: 10px; text-align: center; font-size: 12px;">
-//                 Municipalidad Distrital de Vista Alegre — MDVA Sistema de Usuarios
-//               </div>
-//             </div>
-//           `
-//         });
-//         console.log(`📧 Alerta enviada a ${user.email}`);
-//       }
-//       return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
-//     }
-//     resetAttempts(emailOrDni);
-//     res.json({
-//       success: true,
-//       user: {
-//         id: user.id,
-//         nombres: user.nombres,
-//         apellidos: user.apellidos,
-//         dni: user.dni,
-//         email: user.email,
-//         telefono: user.telefono,
-//         cargo_nombre: user.cargo_nombre || '',
-//         area_nombre: user.area_nombre || '',
-//         rol: user.rol
-//       }
-//     });
-//   } catch (err) {
-//     console.error('Error en /login:', err);
-//     res.status(500).json({ error: 'Error en el servidor' });
-//   }
-// });
-
-// // Endpoint para obtener áreas
-// app.get('/areas', async (req, res) => {
-//   try {
-//     const result = await pool.query('SELECT id, nombre FROM areas ORDER BY id');
-//     res.json(result.rows);
-//   } catch (err) {
-//     res.status(500).json({ error: 'Error al obtener áreas' });
-//   }
-// });
-
-// // Endpoint para obtener roles
-// app.get('/roles', async (req, res) => {
-//   try {
-//     const result = await pool.query('SELECT id, nombre FROM roles ORDER BY id');
-//     res.json(result.rows);
-//   } catch (err) {
-//     res.status(500).json({ error: 'Error al obtener roles' });
-//   }
-// });
-
-// // Endpoint para obtener cargos, opcionalmente filtrados por area_id
-// app.get('/cargos', async (req, res) => {
-//   try {
-//     const result = await pool.query('SELECT id, nombre FROM cargos ORDER BY id');
-//     res.json(result.rows);
-//   } catch (err) {
-//     res.status(500).json({ error: 'Error al obtener cargos' });
-//   }
-// });
-
-// app.put('/users/:id', async (req, res) => {
-//   const { id } = req.params;
-//   const {
-//     nombres, apellidos, email, telefono,
-//     dni, cargo_id, rol_id, area_id, password, estado
-//   } = req.body;
-//   try {
-//     const prevRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-//     if (!prevRes.rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
-//     const prev = prevRes.rows[0];
-//     let hashedPwd = prev.password;
-//     let pwdChanged = false;
-//     if (password && password !== prev.password) {
-//       if (!schema.validate(password)) {
-//         return res.status(400).json({
-//           error: 'La contraseña no cumple con los requisitos de seguridad. Debe tener mínimo 8 caracteres, incluir mayúsculas, minúsculas, números y no contener espacios.'
-//         });
-//       }
-//       hashedPwd = await bcrypt.hash(password, 10);
-//       pwdChanged = true;
-//     }
-//     const fields = [
-//       nombres, apellidos, email, telefono, dni,
-//       cargo_id, rol_id, area_id, hashedPwd
-//     ];
-//     const placeholders = ['$1','$2','$3','$4','$5','$6','$7','$8','$9'];
-//     let idx = 10;
-//     let query = `UPDATE users SET
-//       nombres=$1, apellidos=$2, email=$3, telefono=$4,
-//       dni=$5, cargo_id=$6, rol_id=$7, area_id=$8, password=$9`;
-//     if (estado) {
-//       query += `, estado_id = (SELECT id_estado FROM estado WHERE LOWER(nombre_estado) = LOWER($${idx}))`;
-//       fields.push(estado);
-//     }
-//     fields.push(id);
-//     query += ` WHERE id = $${fields.length} RETURNING *`;
-//     const updateRes = await pool.query(query, fields);
-//     const updated = updateRes.rows[0];
-//     res.json({ success: true, user: updated });
-//     const tasks = [];
-//     // Estado cambiado
-//     if (estado && prev.estado_id !== updated.estado_id) {
-//       const es = estado.toLowerCase();
-//       const subj = es === 'suspendido' ? 'Cuenta suspendida' : 'Cuenta reactivada';
-//       const label = es === 'suspendido' ? 'Suspendida' : 'Reactivada';
-//       const html = `
-//         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border:1px solid #ddd; border-radius: 8px;">
-//           <div style="background:#FCCCCC; text-align:center; padding:20px;">
-//             <img src="https://i.pinimg.com/736x/8b/7d/ff/8b7dff72f53c290933f1e652b326d8d2.jpg"
-//                 alt="MDVA Logo" style="height:50px;">
-//           </div>
-//           <div style="padding:20px;">
-//             <h2 style="color:#C01702;">Cuenta ${label}</h2>
-//             <p>Hola <strong>${updated.nombres}</strong>,</p>
-//             <p>Tu cuenta ha sido <strong>${label.toLowerCase()}</strong>.</p>
-//             <p>Si crees que fue un error, contacta al administrador.</p>
-//             <hr style="border-top:1px solid #eee;" />
-//             <p style="font-size:12px;color:#666;">Mensaje automático – MDVA</p>
-//           </div>
-//         </div>`;
-//       tasks.push(sendEmail({ to: updated.email, subject: subj, html }));
-//     }
-
-//     // Contraseña cambiada
-//     if (pwdChanged) {
-//       const html = `
-//         <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border:1px solid #ddd; border-radius: 8px;">
-//           <div style="background:#FCCCCC; text-align:center; padding:20px;">
-//             <img src="https://i.pinimg.com/736x/8b/7d/ff/8b7dff72f53c290933f1e652b326d8d2.jpg"
-//                 alt="MDVA Logo" style="height:50px;">
-//           </div>
-//           <div style="padding:20px;">
-//             <h2 style="color:#C01702;">Contraseña actualizada</h2>
-//             <p>Hola <strong>${updated.nombres}</strong>,</p>
-//             <p>Tu contraseña ha sido actualizada exitosamente.</p>
-//             <p>Si no reconoces este cambio, contacta al administrador.</p>
-//             <hr style="border-top:1px solid #eee;" />
-//             <p style="font-size:12px;color:#666;">Mensaje automático – MDVA</p>
-//           </div>
-//         </div>`;
-//       tasks.push(sendEmail({ to: updated.email, subject: 'Contraseña actualizada', html }));
-//     }
-//     await Promise.all(tasks);
-//     console.log(`📧 Notificaciones enviadas a ${updated.email}`);
-//   } catch (err) {
-//     console.error('Error al actualizar usuario:', err);
-//     res.status(500).json({ error: 'Error al actualizar usuario' });
-//   }
-// });
-
-// // Endpoint para obtener todos los estados
-// app.get('/estado', async (req, res) => {
-//   try {
-//     const result = await pool.query('SELECT id_estado AS id, nombre_estado AS nombre FROM estado ORDER BY id_estado');
-//     res.json(result.rows);
-//   } catch (err) {
-//     res.status(500).json({ error: 'Error al obtener estados' });
-//   }
-// });
-
-// // Endpoint para eliminar un usuario físicamente
-// app.delete('/users/:id', async (req, res) => {
-//   const { id } = req.params;
-//   try {
-//     const result = await pool.query(
-//       'DELETE FROM users WHERE id = $1 RETURNING *',
-//       [id]
-//     );
-//     if (result.rows.length === 0) {
-//       return res.status(404).json({ error: 'Usuario no encontrado' });
-//     }
-//     const deletedUser = result.rows[0];
-//     res.json({ success: true, user: deletedUser });
-//     try {
-//       await sendEmail({
-//         to: deletedUser.email,
-//         subject: 'Cuenta eliminada',
-//         html: `
-//           <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
-//             <div style="background-color:rgb(255, 202, 195); padding: 20px; text-align: center;">
-//               <img src="https://i.pinimg.com/736x/8b/7d/ff/8b7dff72f53c290933f1e652b326d8d2.jpg" alt="MDVA Logo" style="height: 50px;" />
-//             </div>
-//             <div style="padding: 20px;">
-//               <h2 style="color: #C01702;">Cuenta Eliminada</h2>
-//               <p>Hola <strong>${deletedUser.nombres}</strong>,</p>
-//               <p>Tu cuenta ha sido <strong>eliminada permanentemente</strong> del sistema MDVA.</p>
-//               <p>Si crees que fue un error, contacta con la Oficina de Transformación Digital.</p>
-// 		          <hr style="border:none;border-top:1px solid #eee;" />
-//               <p style="font-size: 12px; color: #666;">Este mensaje es automático, por favor no lo respondas.</p>
-//             </div>
-//             <div style="background-color: #f5f5f5; padding: 10px; text-align: center; font-size: 12px;">
-//                 Municipalidad Distrital de Vista Alegre — MDVA Sistema de Usuarios
-//             </div>
-//           </div>
-//         `
-//       });
-//       console.log('📧 Correo de eliminación enviado a', deletedUser.email);
-//     } catch (emailErr) {
-//       console.error('❌ Error al enviar correo de eliminación:', emailErr);
-//     }
-//   } catch (err) {
-//     console.error('Error al eliminar usuario:', err);
-//     res.status(500).json({ error: 'Error al eliminar usuario' });
-//   }
-// });
-
-// // Endpoint para registrar un nuevo usuario
-// app.post('/users', async (req, res) => {
-//   const {
-//     nombres, apellidos, email, telefono, dni,
-//     cargo_id, rol_id, area_id, password
-//   } = req.body;
-//   if (!nombres || !apellidos || !email || !telefono || !dni || !cargo_id || !rol_id || !area_id || !password) {
-//     return res.status(400).json({ error: 'Faltan campos obligatorios' });
-//   }
-//   // Validar políticas de contraseña
-//   if (!schema.validate(password)) {
-//     return res.status(400).json({ error: 'Contraseña insegura' });
-//   }
-//   try {
-//     const hashedPwd = await bcrypt.hash(password, 10);
-//     const insertResult = await pool.query(
-//       `INSERT INTO users (nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password, estado_id)
-//        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-//       [nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, hashedPwd, 1]
-//     );
-//     const newUser = insertResult.rows[0];
-//     // Obtener nombres descriptivos de cargo y área
-//     const infoResult = await pool.query(`
-//       SELECT c.nombre AS cargo_nombre, a.nombre AS area_nombre
-//       FROM cargos c, areas a
-//       WHERE c.id = $1 AND a.id = $2
-//     `, [cargo_id, area_id]);
-//     const { cargo_nombre, area_nombre } = infoResult.rows[0];
-//     // Correo de bienvenida
-//     const html = `
-//       <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border:1px solid #ddd; border-radius: 8px;">
-//         <div style="background-color:rgb(255, 202, 195); padding: 20px; text-align: center;">
-//           <img src="https://i.pinimg.com/736x/8b/7d/ff/8b7dff72f53c290933f1e652b326d8d2.jpg" alt="MDVA Logo" style="height: 50px;" />
-//         </div>
-//         <div style="padding: 20px;">
-//           <h2 style="color: #C01702;">¡Bienvenido/a al Sistema MDVA!</h2>
-//           <p>Hola <strong>${newUser.nombres}</strong>,</p>
-//           <p>Tu cuenta ha sido creada exitosamente en el <strong>sistema de usuarios de la Municipalidad Distrital de Vista Alegre</strong>.</p>
-//           <p><strong>Usuario:</strong> ${newUser.dni}</p>
-//           <p><strong>Teléfono:</strong> ${newUser.telefono}</p>
-//           <p><strong>Área:</strong> ${area_nombre}</p>
-//           <p><strong>Cargo:</strong> ${cargo_nombre}</p>
-//           <p>Puedes ingresar con tu contraseña asignada. Si deseas cambiarla, comunícate con la Oficina de Transformación Digital.</p>
-//           <p>¡Gracias por formar parte de nuestra comunidad digital!</p>
-//           <p style="text-align: center; margin: 30px 0;">
-//             <a href="http://localhost:5173/login" style="background-color: #C01702; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-size: 16px;">
-//               Iniciar Sesión en MDVA
-//             </a>
-//           </p>
-//           <hr style="border:none;border-top:1px solid #eee;" />
-//           <p style="font-size: 12px; color: #666;">Este mensaje es automático, por favor no lo respondas.</p>
-//         </div>
-//         <div style="background-color: #f5f5f5; padding: 10px; text-align: center; font-size: 12px;">
-//           Municipalidad Distrital de Vista Alegre — MDVA Sistema de Usuarios
-//         </div>
-//       </div>`;
-//     await sendEmail({
-//       to: newUser.email,
-//       subject: '¡Bienvenido al Sistema MDVA!',
-//       html
-//     });
-//     console.log(`📧 Correo de bienvenida enviado a ${newUser.email}`);
-//     res.status(201).json({ success: true, user: newUser });
-//   } catch (err) {
-//     console.error('Error al registrar usuario:', err);
-//     res.status(500).json({ error: 'Error al registrar usuario' });
-//   }
-// });
-
-// // Endpoint para obtener todos los usuarios con nombre de cargo y área
-// app.get('/users', async (req, res) => {
-//   try {
-//     const result = await pool.query(`
-//       SELECT u.id, u.nombres, u.apellidos, u.email, u.telefono, u.dni,
-//             c.nombre AS cargo, a.nombre AS area, u.rol_id, u.ultimo_acceso,
-//             u.estado_id, est.nombre_estado AS estado, u.password
-//       FROM users u
-//       LEFT JOIN cargos c ON u.cargo_id = c.id
-//       LEFT JOIN areas a ON u.area_id = a.id
-//       LEFT JOIN estado est ON u.estado_id = est.id_estado
-//       ORDER BY u.id
-//     `);
-//     res.json(result.rows);
-//   } catch (err) {
-//     console.error('Error al obtener usuarios:', err);
-//     res.status(500).json({ error: 'Error al obtener usuarios' });
-//   }
-// });
-
-// app.listen(port, () => {
-//   console.log(`Servidor backend escuchando en puerto ${port}`);
-// });
-
-// // Endpoint para estadísticas del dashboard admin
-// app.get('/admin-stats', async (req, res) => {
-//   try {
-//     const totalResult = await pool.query('SELECT COUNT(*) FROM users');
-//     const adminResult = await pool.query(`
-//       SELECT COUNT(*) FROM users u
-//       JOIN roles r ON u.rol_id = r.id
-//       WHERE LOWER(r.nombre) = 'administrador'
-//     `);
-//     const jefeAreaResult = await pool.query(`
-//       SELECT COUNT(*) FROM users u
-//       JOIN cargos c ON u.cargo_id = c.id
-//       WHERE LOWER(c.nombre) = 'jefe de area'
-//     `);
-//     const trabajadoresResult = await pool.query(`
-//       SELECT COUNT(*) FROM users u
-//       JOIN cargos c ON u.cargo_id = c.id
-//       WHERE LOWER(c.nombre) = 'trabajador'
-//     `);
-//     // Contar usuarios suspendidos (estado_id = 2)
-//     const suspendidosResult = await pool.query(`
-//       SELECT COUNT(*) FROM users WHERE estado_id = 2
-//     `);
-//     res.json({
-//       total: parseInt(totalResult.rows[0].count),
-//       admins: parseInt(adminResult.rows[0].count),
-//       areaHeads: parseInt(jefeAreaResult.rows[0].count),
-//       trabajadores: parseInt(trabajadoresResult.rows[0].count),
-//       suspendidos: parseInt(suspendidosResult.rows[0].count)
-//       //recientes: recientes.rows
-//     });
-//   } catch (err) {
-//     console.error('Error en /admin-stats:', err);
-//     res.status(500).json({ error: 'Error al obtener estadísticas del dashboard' });
-//   }
-// });
-
-// app.put('/users/:id/estado', async (req, res) => {
-//   const { id } = req.params;
-//   const { estado } = req.body;
-//   try {
-//     const result = await pool.query(
-//       'UPDATE users SET estado_id = (SELECT id_estado FROM estado WHERE LOWER(nombre_estado) = LOWER($1)) WHERE id = $2 RETURNING *',
-//       [estado, id]
-//     );
-//     if (result.rows.length === 0) {
-//       return res.status(404).json({ error: 'Usuario no encontrado' });
-//     }
-//     const updatedUser = result.rows[0];
-//     res.json({ success: true, user: updatedUser });
-//   } catch (err) {
-//     console.error('Error al cambiar estado:', err);
-//     res.status(500).json({ error: 'Error al cambiar estado del usuario' });
-//   }
-// });
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -430,7 +5,7 @@ import { Pool } from 'pg';
 import bcrypt from 'bcrypt';
 import PasswordValidator from 'password-validator';
 import { sendEmail } from './utils/mailer.js';
-import { recordFailedAttempt, resetAttempts } from './utils/loginAttempts.js';
+import { recordFailedAttempt, markWarned, resetAttempts } from './utils/loginAttempts.js';
 import schema from './utils/passwordPolicy.js'; // esquema correcto
 
 dotenv.config();
@@ -438,7 +13,6 @@ const app = express();
 const port = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
-
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Routes de estado de usuario
@@ -448,17 +22,19 @@ app.use(userStatusRoutes(pool));
 // Regex simple para validar emails
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// --- LOGIN endpoint mejorado ---
 app.post('/login', async (req, res) => {
   const { emailOrDni, password } = req.body;
-  if (!emailOrDni || !password)
+  if (!emailOrDni || !password){
     return res.status(400).json({ error: 'Faltan credenciales' });
-
+  }
+  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip || '';
+  const userKey = emailOrDni.toLowerCase();
+  const MAX_ATTEMPTS = 3;
   try {
-    const { rows } = await pool.query(
-      `SELECT u.id, u.nombres, u.apellidos, u.dni, u.email, u.telefono,
-      u.password, u.estado_id, c.nombre AS cargo_nombre, a.nombre AS area_nombre,
-      LOWER(r.nombre) AS rol
+    const { rows } = await pool.query(`
+      SELECT u.id, u.nombres, u.apellidos, u.dni, u.email, u.telefono,
+              u.password, u.estado_id, c.nombre AS cargo_nombre, a.nombre AS area_nombre,
+              LOWER(r.nombre) AS rol
       FROM users u
       LEFT JOIN cargos c ON u.cargo_id = c.id
       LEFT JOIN areas a ON u.area_id = a.id
@@ -466,14 +42,31 @@ app.post('/login', async (req, res) => {
       WHERE u.email = $1 OR u.dni = $1`,
       [emailOrDni]
     );
-
+    if (rows.length === 0) {
+      await pool.query(
+        `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+        VALUES ($1, 'login', 'autenticacion', 'Intento fallido de login', $2, 'fallido', 'Credenciales incorrectas')`,
+        [emailOrDni, ip]
+      );
+      return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
+    }
     const user = rows[0];
-    const valid = user && await bcrypt.compare(password, user.password);
+    const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
-      const fails = recordFailedAttempt(emailOrDni);
-      console.log(`🛑 Intento fallido para ${emailOrDni} — Total en 15min: ${fails}`);
-      if (fails >= 3 && user) {
-        await sendSecurityAlert(user, fails);
+      const { count, warned } = recordFailedAttempt(userKey);
+      if (count >= MAX_ATTEMPTS && !warned) {
+        await pool.query(
+          `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+          VALUES ($1, 'login_bloqueado', 'autenticacion', 'Superó el máximo de intentos', $2, 'advertencia', 'Revisar actividad sospechosa')`,
+          [emailOrDni, ip]
+        );
+        markWarned(userKey);
+        console.log(`⚠️ Advertencia registrada para ${userKey}`);
+        return res.status(401).json({
+          success: false,
+          error: 'Credenciales incorrectas',
+          warning: 'max_attempts_reached'
+        });
       }
       return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
     }
@@ -481,20 +74,180 @@ app.post('/login', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Cuenta suspendida' });
     }
 
-    resetAttempts(emailOrDni);
-    return res.json({
-      success: true,
-      user: {
-        id: user.id, nombres: user.nombres, apellidos: user.apellidos,
-        dni: user.dni, email: user.email, telefono: user.telefono,
-        cargo: user.cargo_nombre, area: user.area_nombre, rol: user.rol
-      }
-    });
+    // Login válido
+    await pool.query('UPDATE users SET ultimo_acceso = NOW() WHERE id = $1', [user.id]);
+    const refreshed = await pool.query(`
+      SELECT u.*, c.nombre AS cargo_nombre, LOWER(r.nombre) AS rol
+      FROM users u
+      LEFT JOIN cargos c ON u.cargo_id = c.id
+      LEFT JOIN roles r ON u.rol_id = r.id
+      WHERE u.id = $1`,
+      [user.id]
+    );
+    const { password: _, ...userData } = refreshed.rows[0];
+    await pool.query(
+      `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+      VALUES ($1, 'login', 'autenticacion', 'Inicio de sesión exitoso', $2, 'exitoso', null)`,
+      [user.email || user.dni, ip]
+    );
+    resetAttempts(userKey);
+    return res.json({ success: true, user: userData });
   } catch (err) {
     console.error('Error en /login:', err);
-    res.status(500).json({ error: 'Error en el servidor' });
+    return res.status(500).json({ error: 'Error en el servidor' });
   }
 });
+
+// app.post('/login', async (req, res) => {
+//   const { emailOrDni, password } = req.body;
+//   if (!emailOrDni || !password) {
+//     return res.status(400).json({ error: 'Faltan credenciales' });
+//   }
+//   try {
+//     const result = await pool.query(
+//       `SELECT u.id, u.*, c.nombre AS cargo_nombre, LOWER(r.nombre) AS rol
+//       FROM users u
+//       LEFT JOIN cargos c ON u.cargo_id = c.id
+//       LEFT JOIN roles r ON u.rol_id = r.id
+//       WHERE (u.email = $1 OR u.dni = $1) AND u.password = $2`,
+//       [emailOrDni, password]
+//     );
+
+//     if (result.rows.length === 0) {
+//       // Lógica de intentos fallidos
+//       if (!global.failedLoginAttempts) global.failedLoginAttempts = {};
+//       const userKey = String(emailOrDni).toLowerCase();
+//       const MAX_ATTEMPTS = 3;
+//       const now = Date.now();
+//       if (!global.failedLoginAttempts[userKey]) {
+//         global.failedLoginAttempts[userKey] = { count: 0, last: now, warned: false };
+//       }
+//       global.failedLoginAttempts[userKey].count++;
+//       global.failedLoginAttempts[userKey].last = now;
+
+//       // Capturar IP real
+//       const ip =
+//         req.headers['x-forwarded-for']?.toString().split(',').shift() ||
+//         req.socket?.remoteAddress ||
+//         req.ip ||
+//         '';
+
+//       // Registrar intento fallido de login (fallido)
+//       try {
+//         await pool.query(
+//           `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+//            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+//           [
+//             emailOrDni,
+//             'login',
+//             'autenticacion',
+//             'Intento de inicio de sesión fallido',
+//             ip,
+//             'fallido',
+//             'Credenciales incorrectas'
+//           ]
+//         );
+//       } catch (e) {
+//         console.error('Error al registrar log de login fallido:', e);
+//       }
+
+//       // Registrar advertencia solo cuando se llega al límite y no se ha registrado antes
+//       if (
+//         global.failedLoginAttempts[userKey].count === MAX_ATTEMPTS &&
+//         !global.failedLoginAttempts[userKey].warned
+//       ) {
+//         console.log(`Registrando advertencia para ${userKey} (intentos: ${global.failedLoginAttempts[userKey].count})`);
+//         try {
+//           await pool.query(
+//             `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+//              VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+//             [
+//               emailOrDni,
+//               'login_bloqueado',
+//               'autenticacion',
+//               `Usuario superó el máximo de ${MAX_ATTEMPTS} intentos fallidos de inicio de sesión`,
+//               ip,
+//               'advertencia',
+//               `El usuario ha fallado ${MAX_ATTEMPTS} veces consecutivas el login. Se recomienda revisar actividad.`
+//             ]
+//           );
+//           global.failedLoginAttempts[userKey].warned = true;
+//           console.log(`Advertencia registrada y warned=true para ${userKey}`);
+//         } catch (e) {
+//           console.error('Error al registrar log de advertencia de login bloqueado:', e);
+//         }
+//       } else {
+//         if (global.failedLoginAttempts[userKey].count === MAX_ATTEMPTS) {
+//           console.log(`Advertencia YA registrada para ${userKey}, no se repite.`);
+//         } else {
+//           console.log(`Intentos fallidos para ${userKey}: ${global.failedLoginAttempts[userKey].count}`);
+//         }
+//       }
+//       return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
+//     }
+
+// //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
+
+//     const userRow = result.rows[0];
+
+//     // Actualizar último acceso
+//     await pool.query(
+//       'UPDATE users SET ultimo_acceso = NOW() WHERE id = $1',
+//       [userRow.id]
+//     );
+
+//     // Obtener de nuevo datos actualizados
+//     const refreshed = await pool.query(
+//       `SELECT u.*, c.nombre AS cargo_nombre, LOWER(r.nombre) AS rol
+//       FROM users u
+//       LEFT JOIN cargos c ON u.cargo_id = c.id
+//       LEFT JOIN roles r ON u.rol_id = r.id
+//       WHERE u.id = $1`,
+//       [userRow.id]
+//     );
+
+//     // ...existing code...
+
+
+//     const { password: _, ...userData } = refreshed.rows[0];
+
+// //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
+
+//     // Capturar IP real y convertir ::1 a 127.0.0.1
+//     let ip =
+//       req.headers['x-forwarded-for']?.toString().split(',').shift() ||
+//       req.socket?.remoteAddress ||
+//       req.ip ||
+//       '';
+//     if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+//     // Registrar login exitoso
+//     try {
+//       await pool.query(
+//         `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+//          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+//         [
+//           userRow.email || userRow.dni,
+//           'login',
+//           'autenticacion',
+//           'Inicio de sesión exitoso',
+//           ip,
+//           'exitoso',
+//           null
+//         ]
+//       );
+//     } catch (e) {
+//       console.error('Error al registrar log de login exitoso:', e);
+//     }
+
+//     res.json({ success: true, user: userData });
+
+//   } catch (err) {
+//     console.error('Error en /login:', err);
+//     res.status(500).json({ error: 'Error en el servidor' });
+//   }
+
+//   //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
+// });
 
 async function sendSecurityAlert(user, fails) {
   const html = `
@@ -517,15 +270,42 @@ async function sendSecurityAlert(user, fails) {
 // --- CREAR USUARIO con password-policy y correo de bienvenida ---
 app.post('/users', async (req, res) => {
   const { nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password } = req.body;
+  
+    if (!nombres || !apellidos || !email || !telefono || !dni || !cargo_id || !rol_id || !area_id || !password) {
+   
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----   
+    // Registrar en audit_logs el intento fallido por validación
+    try {
+      let ip = req.headers['x-forwarded-for']?.toString().split(',').shift() || req.socket?.remoteAddress || req.ip || '';
+      if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+      let safeEmail = (typeof email === 'string' ? email : (email ? String(email) : '')).slice(0, 100);
+      if (!safeEmail) safeEmail = 'no_proporcionado';
+      await pool.query(
+        `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+        [
+          safeEmail,
+          'crear_usuario',
+          'usuarios',
+          'Intento fallido: faltan campos obligatorios',
+          ip,
+          'fallido',
+          JSON.stringify({ nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password })
+        ]
+      );
+    } catch (e) {
+      console.error('Error al registrar log de error de validación de usuario:', e);
+    }
+    return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  }
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
+  
   if (![nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password].every(v => v))
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
-
   if (!emailRegex.test(email))
     return res.status(400).json({ error: 'Formato de correo inválido' });
-
   if (!schema.validate(password))
     return res.status(400).json({ error: 'Contraseña insegura' });
-
   try {
     const hashedPwd = await bcrypt.hash(password, 10);
     const insert = await pool.query(
@@ -534,22 +314,99 @@ app.post('/users', async (req, res) => {
       [nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, hashedPwd]
     );
     const newUser = insert.rows[0];
-
     const info = await pool.query(
       `SELECT c.nombre AS cargo_nombre, a.nombre AS area_nombre
-       FROM cargos c JOIN areas a ON a.id = $2
-       WHERE c.id = $1`, [cargo_id, area_id]
+      FROM cargos c JOIN areas a ON a.id = $2
+      WHERE c.id = $1`, [cargo_id, area_id]
     );
     const { cargo_nombre, area_nombre } = info.rows[0];
-
     await sendWelcomeEmail(newUser, cargo_nombre, area_nombre);
     console.log(`📧 Correo bienvenido enviado a ${newUser.email}`);
     res.status(201).json({ success: true, user: newUser });
+  
+  //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----    
+    // Registrar en audit_logs (éxito)
+    try {
+      let ip = req.headers['x-forwarded-for']?.toString().split(',').shift() || req.socket?.remoteAddress || req.ip || '';
+      if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+      await pool.query(
+        `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+        [
+          email || '',
+          'crear_usuario',
+          'usuarios',
+          `Registro de nuevo usuario (${nombres || ''} ${apellidos || ''}, DNI: ${dni || ''})`,
+          ip,
+          'exitoso',
+          null
+        ]
+      );
+    } catch (e) {
+      console.error('Error al registrar log de creación de usuario:', e);
+    }
+    res.status(201).json({ success: true, user: result.rows[0] });
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
   } catch (err) {
     console.error('Error al registrar usuario:', err);
+    //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
+    // Registrar en audit_logs (fallido)
+    // Registrar log de error de usuario en una conexión separada para evitar rollback
+    (async () => {
+      try {
+        let ip = req.headers['x-forwarded-for']?.toString().split(',').shift() || req.socket?.remoteAddress || req.ip || '';
+        if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+        let safeEmail = (typeof email === 'string' ? email : (email ? String(email) : '')).slice(0, 100);
+        if (!safeEmail) safeEmail = 'no_proporcionado';
+        const safeNombres = (typeof nombres === 'string' ? nombres : (nombres ? String(nombres) : '')).slice(0, 100);
+        const safeApellidos = (typeof apellidos === 'string' ? apellidos : (apellidos ? String(apellidos) : '')).slice(0, 100);
+        const safeDni = (typeof dni === 'string' ? dni : (dni ? String(dni) : '')).slice(0, 20);
+        const safeAccion = 'crear_usuario'.slice(0, 100);
+        const safeModulo = 'usuarios'.slice(0, 100);
+        const safeDescripcion = (`Error al registrar usuario (${safeNombres} ${safeApellidos}, DNI: ${safeDni})`).slice(0, 1000);
+        const safeIp = (ip || '').toString().slice(0, 45);
+        const safeResultado = 'fallido'.slice(0, 50);
+        let detalles = err && err.message ? err.message : (typeof err === 'string' ? err : JSON.stringify(err));
+        detalles = detalles ? detalles.toString().slice(0, 1000) : '';
+        console.log('Intentando registrar log de error de creación de usuario en audit_logs con:', {
+          safeEmail,
+          accion: safeAccion,
+          modulo: safeModulo,
+          descripcion: safeDescripcion,
+          ip: safeIp,
+          resultado: safeResultado,
+          detalles
+        });
+        const client = await pool.connect();
+        try {
+          await client.query(
+            `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+            [
+              safeEmail,
+              safeAccion,
+              safeModulo,
+              safeDescripcion,
+              safeIp,
+              safeResultado,
+              detalles
+            ]
+          );
+          console.log('Log de error de creación de usuario registrado en audit_logs (conexión separada)');
+        } finally {
+          client.release();
+        }
+      } catch (e) {
+        console.error('Error al registrar log de error de creación de usuario (conexión separada):', e, 'Datos:', { email, nombres, apellidos, dni });
+      }
+    })();
     res.status(500).json({ error: 'Error al registrar usuario' });
   }
 });
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
+   // res.status(500).json({ error: 'Error al registrar usuario' });
+ // }
+//});
 
 async function sendWelcomeEmail(user, cargo, area) {
   const html = `
@@ -561,9 +418,9 @@ async function sendWelcomeEmail(user, cargo, area) {
         <h2 style="color:#C01702;">¡Bienvenido/a al sistema MDVA!</h2>
         <p>Hola <strong>${user.nombres}</strong>, tu cuenta ha sido creada exitosamente.</p>
         <p><strong>Usuario:</strong> ${user.dni}<br>
-           <strong>Teléfono:</strong> ${user.telefono}<br>
-           <strong>Área:</strong> ${area}<br>
-           <strong>Cargo:</strong> ${cargo}</p>
+          <strong>Teléfono:</strong> ${user.telefono}<br>
+          <strong>Área:</strong> ${area}<br>
+          <strong>Cargo:</strong> ${cargo}</p>
         <p>Ya puedes iniciar sesión haciendo clic en el botón:</p>
         <p style="text-align:center;margin:30px 0">
           <a href="http://localhost:5173/login" style="background-color:#C01702;color:white;padding:12px 24px;border-radius:4px;text-decoration:none;">
@@ -615,11 +472,52 @@ app.put('/users/:id', async (req, res) => {
     if (pwdChanged) {
       tasks.push(sendPasswordChangeEmail(updated));
     }
-    await Promise.all(tasks);
+    //await Promise.all(tasks);
     console.log(`📧 Notificaciones enviadas a ${updated.email}`);
+  
+    //Modificacion Logs de Auditoria - Registro de edicion de usuario (09/07/2025) ------ INICIO -----
+    // Comparar campos y registrar log de auditoría
+    const cambios = [];
+    if (prev.nombres !== nombres) cambios.push('nombres');
+    if (prev.apellidos !== apellidos) cambios.push('apellidos');
+    if (prev.email !== email) cambios.push('email');
+    if (prev.telefono !== telefono) cambios.push('telefono');
+    if (prev.dni !== dni) cambios.push('dni');
+    if (String(prev.cargo_id) !== String(cargo_id)) cambios.push('cargo_id');
+    if (String(prev.rol_id) !== String(rol_id)) cambios.push('rol_id');
+    if (String(prev.area_id) !== String(area_id)) cambios.push('area_id');
+    if (prev.password !== password) cambios.push('password');
+
+    // Registrar log solo si hubo cambios
+    if (cambios.length > 0) {
+      let ip = req.headers['x-forwarded-for']?.toString().split(',').shift() || req.socket?.remoteAddress || req.ip || '';
+      if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+      await pool.query(
+        `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+        [
+          email || prev.email || '',
+          'editar_usuario',
+          'usuarios',
+          `Usuario editado (ID: ${id}). Campos modificados: ${cambios.join(', ')}`,
+          ip,
+          'exitoso',
+          JSON.stringify({ antes: prev, despues: updated, campos_modificados: cambios })
+        ]
+      );
+    }
+    res.json({ success: true, user: updated });
+    //Modificacion Logs de Auditoria - Registro de edicion de usuario (09/07/2025) ------ FIN -----  
+    // Ejecución de tareas asíncronas sin bloquear la respuesta
+    Promise.all(tasks).catch(e =>
+      console.error('Error al enviar notificaciones de edición:', e)
+    );
+
   } catch (err) {
     console.error('Error al actualizar usuario:', err);
-    res.status(500).json({ error: 'Error al actualizar usuario' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error al actualizar usuario' });
+    }
   }
 });
 
@@ -717,6 +615,76 @@ app.get('/areas', async (req, res) => {
   }
 });
 
+// Endpoint para limpiar logs de auditoría (solo admin)
+app.post('/audit-logs/clear', async (req, res) => {
+  const { usuario } = req.body;
+  if (!usuario) {
+    return res.status(400).json({ error: 'Usuario requerido' });
+  }
+  try {
+    // Verificar si el usuario es administrador
+    const userResult = await pool.query(
+      `SELECT r.nombre FROM users u JOIN roles r ON u.rol_id = r.id WHERE u.email = $1 OR u.dni = $1`,
+      [usuario]
+    );
+    if (userResult.rows.length === 0 || userResult.rows[0].nombre.toLowerCase() !== 'administrador') {
+      return res.status(403).json({ error: 'Solo administradores pueden limpiar los logs' });
+    }
+    // Registrar acción en logs (autolog) DESPUÉS de eliminar
+    await pool.query('DELETE FROM audit_logs');
+    let ip = req.headers['x-forwarded-for']?.toString().split(',').shift() || req.socket?.remoteAddress || req.ip || '';
+    if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+    await pool.query(
+      `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+      [usuario, 'limpiar_logs', 'auditoria', 'Limpieza de logs de auditoría', ip, 'exitoso', null]
+    );
+    res.json({ success: true, message: 'Logs de auditoría limpiados' });
+  } catch (err) {
+    console.error('Error al limpiar logs de auditoría:', err);
+    res.status(500).json({ error: 'Error al limpiar logs de auditoría' });
+  }
+});
+
+// Endpoint para obtener logs de auditoría
+app.get('/audit-logs', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, timestamp, usuario, accion, modulo, descripcion, ip, resultado, detalles
+      FROM audit_logs
+      ORDER BY timestamp DESC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error al obtener logs de auditoría:', err);
+    res.status(500).json({ error: 'Error al obtener logs de auditoría' });
+  }
+});
+
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (08/07/2025) ------ INICIO -----
+
+// Endpoint para obtener valores únicos de filtros de audit_logs
+app.get('/audit-logs/filters', async (req, res) => {
+  try {
+    const [modulos, acciones, usuarios, resultados] = await Promise.all([
+      pool.query('SELECT DISTINCT modulo FROM audit_logs ORDER BY modulo'),
+      pool.query('SELECT DISTINCT accion FROM audit_logs ORDER BY accion'),
+      pool.query('SELECT DISTINCT usuario FROM audit_logs ORDER BY usuario'),
+      pool.query('SELECT DISTINCT resultado FROM audit_logs ORDER BY resultado')
+    ]);
+    res.json({
+      modulos: modulos.rows.map(r => r.modulo),
+      acciones: acciones.rows.map(r => r.accion),
+      usuarios: usuarios.rows.map(r => r.usuario),
+      resultados: resultados.rows.map(r => r.resultado)
+    });
+  } catch (err) {
+    console.error('Error al obtener filtros de audit_logs:', err);
+    res.status(500).json({ error: 'Error al obtener filtros de audit_logs' });
+  }
+});
+
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (08/07/2025) ------ FIN -----
 // Endpoint para obtener roles
 app.get('/roles', async (req, res) => {
   try {
@@ -756,6 +724,44 @@ app.get('/users', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener usuarios' });
   }
 });
+
+// Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+
+
+// Endpoint para registrar advertencias de validación del frontend en audit_logs
+app.post('/audit-logs/frontend-warning', async (req, res) => {
+  const { usuario, accion, modulo, descripcion, detalles } = req.body;
+  let ip = req.headers['x-forwarded-for']?.toString().split(',').shift() || req.socket?.remoteAddress || req.ip || '';
+  if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+  // Si la acción es exportar PDF, registrar como exitoso
+  let resultado = 'advertencia';
+  if (
+    accion && accion.toLowerCase().includes('exportar') &&
+    descripcion && descripcion.toLowerCase().includes('pdf')
+  ) {
+    resultado = 'exitoso';
+  }
+  try {
+    await pool.query(
+      `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+      [
+        usuario || 'no_proporcionado',
+        accion || 'validacion_frontend',
+        modulo || 'usuarios',
+        descripcion || 'Advertencia de validación en frontend',
+        ip,
+        resultado,
+        detalles ? (typeof detalles === 'string' ? detalles : JSON.stringify(detalles)) : null
+      ]
+    );
+    res.status(201).json({ success: true });
+  } catch (e) {
+    console.error('Error al registrar advertencia frontend en audit_logs:', e);
+    res.status(500).json({ error: 'Error al registrar advertencia' });
+  }
+});
+// Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
 
 // Endpoint para estadísticas del dashboard admin
 app.get('/admin-stats', async (req, res) => {

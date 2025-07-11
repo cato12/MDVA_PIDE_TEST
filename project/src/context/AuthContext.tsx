@@ -24,7 +24,7 @@ type AuthContextType = {
   isSessionActive: () => boolean;
 };
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -77,10 +77,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return 'error';
     }
   };
+  // let isLoggingOut = false;
+  //const logout = () => {
+    //setUser(null);
+    //localStorage.removeItem('municipal_user');
+ // };
 
-  const logout = () => {
-    setUser(null);
+ //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
+  /**
+   * Cierra sesión, registra auditoría en backend y limpia usuario de localStorage.
+   */
+  // Flag para evitar logout múltiple
+  let isLoggingOut = false;
+  const logout = async () => {
+    if (isLoggingOut) return;
+    isLoggingOut = true;
+    if (user) {
+      try {
+        await fetch('http://localhost:4000/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usuario: user.email || user.dni })
+        });
+      } catch (error) {
+        // Opcional: manejar error de red
+      }
+    }
+    //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
+
+  setUser(null);
     localStorage.removeItem('municipal_user');
+    localStorage.removeItem('mdva_session_expiry');
+    //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
+    setTimeout(() => { isLoggingOut = false; }, 1000); // Permitir logout de nuevo tras 1s
+    //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
   };
 
   const isSessionActive = () => checkSessionActive();

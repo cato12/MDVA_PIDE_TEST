@@ -19,8 +19,12 @@ interface ToastContextType {
 }
 
 
+
+
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
 // Contexto de toasts
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
+export const ToastContext = createContext<ToastContextType | undefined>(undefined);
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
 
 
 /**

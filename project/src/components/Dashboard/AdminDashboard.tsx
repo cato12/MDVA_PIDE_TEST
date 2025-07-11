@@ -127,6 +127,67 @@ export function AdminDashboard() {
   //   }
   // ];
 
+ //Modificacion Logs de Auditoria - Monitoreo del Sistema (Actividad Reciente del Sistema - Panel Administrativo) (09/07/2025) ------ INICIO -----
+ 
+  // Actividad reciente real desde logs de auditoría
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  useEffect(() => {
+    const fetchRecentActivity = async () => {
+      try {
+        const res = await fetch('http://localhost:4000/audit-logs');
+        if (!res.ok) throw new Error('Error al obtener logs');
+        const data = await res.json();
+        // Mapear los 10 logs más recientes al formato visual del dashboard
+        setRecentActivity(
+          data.slice(0, 10).map((log: any) => {
+            let title = log.accion;
+            let description = log.descripcion;
+            // Personalizar detalles para login/logout
+            if (log.accion && typeof log.accion === 'string') {
+              const accionLower = log.accion.toLowerCase();
+              if (accionLower.includes('login') || accionLower.includes('inicio de sesión')) {
+                if (log.resultado === 'exitoso') {
+                  title = 'Inicio de sesión exitoso';
+                  description = `El usuario ${log.usuario} inició sesión correctamente.`;
+                } else {
+                  title = 'Intento de inicio de sesión fallido';
+                  description = `Intento fallido de inicio de sesión para el usuario ${log.usuario}.`;
+                }
+              } else if (accionLower.includes('logout') || accionLower.includes('cierre de sesión')) {
+                title = 'Cierre de sesión';
+                description = `El usuario ${log.usuario} cerró sesión.`;
+              }
+            }
+            // Evitar redundancia: si la descripción es igual o muy similar al título, omitirla
+            const descLower = (description || '').toLowerCase().trim();
+            const titleLower = (title || '').toLowerCase().trim();
+            const showDescription = descLower && descLower !== titleLower && !descLower.startsWith(titleLower);
+            return {
+              id: log.id,
+              type: log.modulo || 'Sistema',
+              title,
+              description: showDescription ? description : '',
+              time: new Date(log.timestamp).toLocaleString('es-PE'),
+              status: log.resultado === 'exitoso' ? 'Exitoso' : log.resultado === 'fallido' ? 'Fallido' : 'Advertencia',
+              priority: log.resultado === 'fallido' ? 'alta' : log.resultado === 'advertencia' ? 'media' : 'baja',
+              usuario: log.usuario
+            };
+          })
+        );
+      } catch {
+        setRecentActivity([]);
+      }
+    };
+    fetchRecentActivity();
+    const interval = setInterval(fetchRecentActivity, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+
+//Modificacion Logs de Auditoria - Monitoreo del Sistema (Actividad Reciente del Sistema - Panel Administrativo) (09/07/2025) ------ FIN -----
+  
+// Métricas de distribución de usuarios por rol
+
   const systemMetrics = [
     {
       label: 'Trabajadores',
@@ -225,7 +286,7 @@ export function AdminDashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
         {/* Actividad Reciente (mejorado) */}
         {/* <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">
@@ -263,6 +324,53 @@ export function AdminDashboard() {
             ))}
           </div>
         </div> */}
+
+{/* //Modificacion Logs de Auditoria - Monitoreo del Sistema (Actividad Reciente del Sistema - Panel Administrativo) (09/07/2025) ------ INICIO ----- */}        
+         {/* Actividad Reciente (mejorado) */}
+        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">
+            <Activity className="h-5 w-5 text-[#C01702]" />
+            <span className="text-[#C01702]">Actividad Reciente del Sistema</span>
+          </h2>
+          <div className="space-y-4 max-h-96 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#C01702]/60 scrollbar-track-gray-200 dark:scrollbar-track-gray-800">
+            {recentActivity.map((activity) => (
+              <div key={activity.id} className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow transition-shadow duration-200">
+                <div className="flex-shrink-0 flex items-center justify-center rounded-full bg-[#F6E7E4] dark:bg-[#2A1A18] border border-[#C01702] p-3">
+                  {getPriorityIcon(activity.priority)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border border-[#C01702] text-[#C01702] bg-white dark:bg-gray-900 uppercase tracking-wide">
+                      {activity.type}
+                    </span>
+                    {/* //Modificacion Logs de Auditoria - Monitoreo del Sistema (Actividad Reciente del Sistema - Panel Administrativo) (04/07/2025) ------ INICIO ----- */}
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ml-2 ${activity.status === 'Exitoso' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : activity.status === 'Fallido' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'}`}>
+                     {/* //Modificacion Logs de Auditoria - Monitoreo del Sistema (Actividad Reciente del Sistema - Panel Administrativo) (04/07/2025) ------ FIN ----- */}
+                      {activity.status}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-900 dark:text-white text-base truncate">
+                      {activity.title}
+                    </p>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">
+                      {activity.time}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    {activity.description}
+                  </p>
+                  {/* //Modificacion Logs de Auditoria - Monitoreo del Sistema (Actividad Reciente del Sistema - Panel Administrativo) (04/07/2025) ------ INICIO ----- */}
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 italic">
+                    Usuario: {activity.usuario}
+                  </p>
+              {/* //Modificacion Logs de Auditoria - Monitoreo del Sistema (Actividad Reciente del Sistema - Panel Administrativo) (04/07/2025) ------ FIN ----- */}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+{/* //Modificacion Logs de Auditoria - Monitoreo del Sistema (Actividad Reciente del Sistema - Panel Administrativo) (09/07/2025) ------ FIN ----- */}
         {/* Métricas del Sistema */}
         <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
           <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">

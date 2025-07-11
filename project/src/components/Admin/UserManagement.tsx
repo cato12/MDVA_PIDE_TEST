@@ -57,6 +57,23 @@ import {
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 
+// Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+
+// Función utilitaria para registrar advertencias de validación en audit_logs
+async function registrarAdvertenciaAuditLog({ usuario, accion, modulo, descripcion, detalles }: any) {
+  try {
+    await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/audit-logs/frontend-warning`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario, accion, modulo, descripcion, detalles })
+    });
+  } catch (e) {
+    // No interrumpir la UX si falla el log
+  }
+}
+
+// Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+
 /**
  * Estructura de un usuario del sistema.
  */
@@ -83,7 +100,10 @@ export function UserManagement() {
     const img = new Image();
     img.src = '/imagenes/logo_mdva_rojo.png';
 
-    img.onload = () => {
+    /* img.onload = () => { */
+    // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+    img.onload = async () => {
+    // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
       // Logo en encabezado
       doc.addImage(img, 'PNG', 14, 10, 30, 30); 
 
@@ -144,6 +164,18 @@ export function UserManagement() {
       }
       const fecha = new Date().toISOString().split('T')[0];
       doc.save(`usuarios_${fecha}.pdf`);
+      // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+      // --- Registrar log de auditoría exitoso por exportación PDF ---
+      try {
+        await registrarAdvertenciaAuditLog({
+          usuario: usuarioSesion?.email || 'no_proporcionado',
+          accion: 'Exportar PDF',
+          modulo: 'usuarios',
+          descripcion: 'Exportación de gestión de usuarios a PDF',
+          detalles: { cantidad: filteredUsuarios.length, fecha: fechaHora }
+        });
+      } catch {}
+// Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
     };
   };
 
@@ -892,28 +924,82 @@ export function UserManagement() {
                       const passwordValue = password;
                       if (!nombre || !apellidos || !dni || !email || !telefono || !selectedAreaId || !selectedCargoId || !selectedRolId) {
                         addToast('Completa todos los campos obligatorios', 'error');
+                                                // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+                        registrarAdvertenciaAuditLog({
+                          usuario: email || 'no_proporcionado',
+                          accion: 'Campos obligatorios incompletos',
+                          modulo: 'usuarios',
+                          descripcion: 'Validación Frontend',
+                          detalles: { nombre, apellidos, dni, email, telefono, selectedAreaId, selectedCargoId, selectedRolId }
+                        });
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
                       if (dni.length !== 8 || !/^\d{8}$/.test(dni)) {
                         addToast('El DNI debe tener exactamente 8 dígitos numéricos', 'error');
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+                        registrarAdvertenciaAuditLog({
+                          usuario: email || 'no_proporcionado',
+                          accion: 'DNI inválido',
+                          modulo: 'usuarios',
+                          descripcion: 'Validación Frontend',
+                          detalles: { dni, email }
+                        });
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
                       if (telefono.length < 7 || telefono.length > 9 || !/^\d+$/.test(telefono)) {
                         addToast('El teléfono debe tener entre 7 y 9 dígitos numéricos', 'error');
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+                        registrarAdvertenciaAuditLog({
+                          usuario: email || 'no_proporcionado',
+                          accion: 'Teléfono inválido',
+                          modulo: 'usuarios',
+                          descripcion: 'Validación Frontend',
+                          detalles: { telefono, email }
+                        });
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
                       const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+$/;
                       if (!nombreRegex.test(nombre)) {
                         addToast('El nombre solo debe contener letras y espacios', 'error');
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+                        registrarAdvertenciaAuditLog({
+                          usuario: email || 'no_proporcionado',
+                          accion: 'Nombre inválido',
+                          modulo: 'usuarios',
+                          descripcion: 'Validación Frontend',
+                          detalles: { nombre, email }
+                        });
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
                       if (!nombreRegex.test(apellidos)) {
                         addToast('El apellido solo debe contener letras y espacios', 'error');
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+                        registrarAdvertenciaAuditLog({
+                          usuario: email || 'no_proporcionado',
+                          accion: 'Apellido inválido',
+                          modulo: 'usuarios',
+                          descripcion: 'Validación Frontend',
+                          detalles: { apellidos, email }
+                        });
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
                       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                       if (!emailRegex.test(email)) {
                         addToast('Correo electrónico no válido', 'error');
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
+                        registrarAdvertenciaAuditLog({
+                          usuario: email || 'no_proporcionado',
+                          accion: 'Email inválido',
+                          modulo: 'usuarios',
+                          descripcion: 'Validación Frontend',
+                          detalles: { email }
+                        });
+                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
                       const userPayload = {
