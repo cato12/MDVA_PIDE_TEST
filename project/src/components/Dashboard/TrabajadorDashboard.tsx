@@ -195,41 +195,7 @@ export function TrabajadorDashboard() {
           - Cada bloque es accesible, con contraste y título descriptivo.
           - Porcentaje visual, leyenda y colores institucionales.
         */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow border border-gray-200 dark:border-gray-700 flex flex-col justify-between">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-[#C01702]" aria-hidden="true" />
-            <span className="text-[#C01702]">Resumen de Actividad</span>
-          </h2>
-          <div className="flex flex-col md:flex-row gap-6 h-full">
-            {/* RUC: porcentaje de consultas RUC */}
-            <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 p-6 shadow-sm min-h-[180px]" aria-label="Consultas RUC">
-              <div className="rounded-full bg-[#F6E7E4] dark:bg-[#2A1A18] border border-[#C01702] p-4 mb-3 flex items-center justify-center">
-                <Building className="h-7 w-7 text-[#C01702]" aria-hidden="true" />
-              </div>
-              <div className="text-3xl font-extrabold text-[#C01702] mb-1" title="47 consultas">{Math.round((47/136)*100)}%</div>
-              <div className="text-base font-medium text-gray-700 dark:text-gray-300 mb-1">Consultas RUC</div>
-              <div className="text-xs text-gray-400 dark:text-gray-500">Esta semana</div>
-            </div>
-            {/* DNI: porcentaje de consultas DNI */}
-            <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 p-6 shadow-sm min-h-[180px]" aria-label="Consultas DNI">
-              <div className="rounded-full bg-[#F6E7E4] dark:bg-[#2A1A18] border border-[#C01702] p-4 mb-3 flex items-center justify-center">
-                <User className="h-7 w-7 text-[#C01702]" aria-hidden="true" />
-              </div>
-              <div className="text-3xl font-extrabold text-[#C01702] mb-1" title="89 consultas">{Math.round((89/136)*100)}%</div>
-              <div className="text-base font-medium text-gray-700 dark:text-gray-300 mb-1">Consultas DNI</div>
-              <div className="text-xs text-gray-400 dark:text-gray-500">Esta semana</div>
-            </div>
-            {/* Éxito: tasa de éxito de consultas */}
-            <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800 p-6 shadow-sm min-h-[180px]" aria-label="Tasa de Éxito">
-              <div className="rounded-full bg-[#F6E7E4] dark:bg-[#2A1A18] border border-[#C01702] p-4 mb-3 flex items-center justify-center">
-                <Activity className="h-7 w-7 text-[#C01702]" aria-hidden="true" />
-              </div>
-              <div className="text-3xl font-extrabold text-[#C01702] mb-1">96%</div>
-              <div className="text-base font-medium text-gray-700 dark:text-gray-300 mb-1">Tasa de Éxito</div>
-              <div className="text-xs text-gray-400 dark:text-gray-500">Consultas exitosas</div>
-            </div>
-          </div>
-        </div>
+        
       </div>
 
     </div>

@@ -147,13 +147,32 @@ export function AuditLogs() {
   const filteredLogs = logs
     .map(normalizeLog)
     .filter(log => {
-      const matchesSearch =
-        log.usuario.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.accion.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesModule = moduleFilter === 'todos' || log.modulo === moduleFilter;
-      const matchesResult = resultFilter === 'todos' || log.resultado === resultFilter;
-      return matchesSearch && matchesModule && matchesResult;
+      console.log('🔍 filtrando log:', log.timestamp, 'con filtro:', dateFilter);
+      const logDate = new Date(log.timestamp);
+      const now = new Date();
+      let matchesDate = true;
+
+      if (dateFilter === 'hoy') {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        matchesDate = logDate >= today;
+      } else if (dateFilter === 'semana') {
+        const weekAgo = new Date();
+        weekAgo.setDate(now.getDate() - 7);
+        matchesDate = logDate >= weekAgo;
+      } else if (dateFilter === 'mes') {
+        const monthAgo = new Date();
+        monthAgo.setMonth(now.getMonth() - 1);
+        matchesDate = logDate >= monthAgo;
+      }
+
+      console.log('→ matchesDate?', matchesDate);
+      return matchesDate &&
+            (moduleFilter === 'todos' || log.modulo === moduleFilter) &&
+            (resultFilter === 'todos' || log.resultado === resultFilter) &&
+            (log.usuario.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              log.accion.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              log.descripcion.toLowerCase().includes(searchTerm.toLowerCase()));
     });
 
       // //Modificacion Logs de Auditoria - Monitoreo del Sistema (Reporte PDF de Gestion de usuarios ) (09/07/2025) ------ FIN -----
@@ -204,11 +223,34 @@ export function AuditLogs() {
     // TODO: Implementar exportación real de logs si es necesario
   }; */
 
-  // //Modificacion Logs de Auditoria - Monitoreo del Sistema (Reporte PDF) (09/07/2025) ------ INICIO -----
-  const exportLogs = () => {
+
+// Modificacion Logs de Auditoria 11/07/2025 15:51 - Registro en audit_logs, exportacion PDF de monitoreo del sistema (Suspendido/Activo) | INICIO
+  // Función utilitaria para registrar en audit_logs (puedes moverla a un helper si ya existe)
+  async function registrarAuditLogMonitoreo({ usuario, accion, modulo, descripcion, detalles }: any) {
+    const url = `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/audit-logs/frontend-warning`;
+    console.log('[AUDIT-DEBUG] Enviando registro a audit_logs:', { usuario, accion, modulo, descripcion, detalles, url });
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuario, accion, modulo, descripcion, detalles })
+      });
+      console.log('[AUDIT-DEBUG] Respuesta del backend:', res.status, res.statusText);
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('[AUDIT-DEBUG] Error al registrar en audit_logs:', errorText);
+      }
+    } catch (err) {
+      console.error('[AUDIT-DEBUG] Error de red al registrar en audit_logs:', err);
+    }
+  }
+
+  const exportLogs = async () => {
     const doc = new jsPDF('landscape');
     const img = new window.Image();
     img.src = '/imagenes/logo_mdva_rojo.png';
+
+// Modificacion Logs de Auditoria 11/07/2025 15:51 - Registro en audit_logs, exportacion PDF de monitoreo del sistema (Suspendido/Activo) | FIN
 
     type ColKey = 'fecha' | 'usuario' | 'accion' | 'modulo' | 'descripcion' | 'ip' | 'resultado';
     const cols: { header: string; dataKey: ColKey }[] = [
@@ -292,7 +334,38 @@ export function AuditLogs() {
       const fecha = new Date().toISOString().split('T')[0];
       doc.save(`monitoreo_${fecha}.pdf`);
     };
+
+// Modificacion Logs de Auditoria 11/07/2025 15:51 - Registro en audit_logs, exportacion PDF de monitoreo del sistema (Suspendido/Activo) | INICIO
+
+    // Registrar en audit_logs (monitoreo del sistema)
+    // Prioridad: contexto de usuario (AuthContext), luego localStorage, nunca 'no_proporcionado'
+    let emailUsuario = '';
+    if (user && user.email) {
+      emailUsuario = user.email;
+    } else {
+      try {
+        const usuarioSesion = JSON.parse(localStorage.getItem('usuarioSesion') || '{}');
+        if (usuarioSesion && usuarioSesion.email) {
+          emailUsuario = usuarioSesion.email;
+        }
+      } catch {}
+    }
+    if (!emailUsuario) {
+      // Opción: mostrar toast de advertencia si no hay email
+      toast?.addToast('No se pudo obtener el correo del usuario para el registro de auditoría.', 'warning');
+      emailUsuario = 'desconocido';
+    }
+    const fechaHora = new Date().toISOString();
+    await registrarAuditLogMonitoreo({
+      usuario: emailUsuario,
+      accion: 'Exportar PDF',
+      modulo: 'monitoreo',
+      descripcion: `Exportación de monitoreo del sistema a PDF`,
+      detalles: { cantidad: filteredLogs.length, fecha: fechaHora }
+    });
   };
+
+// Modificacion Logs de Auditoria 11/07/2025 15:51 - Registro en audit_logs, exportacion PDF de monitoreo del sistema (Suspendido/Activo) | INICIO
 
 // //Modificacion Logs de Auditoria - Monitoreo del Sistema (Reporte PDF) (09/07/2025) ------ FIN -----
 
@@ -322,7 +395,7 @@ export function AuditLogs() {
           <button
             onClick={exportLogs}
             title="Exportar registros a PDF"
-            className="flex items-center gap-2 px-5 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold shadow transition focus:outline-none"
+            className="flex items-center gap-2 px-5 py-2 bg-white border border-[#C01702] text-[#C01702] hover:bg-[#C01702] hover:text-white rounded-lg font-semibold shadow transition focus:outline-none"
             aria-label="Exportar logs a PDF"
           >
             <FileText className="h-5 w-5" />
@@ -498,61 +571,6 @@ export function AuditLogs() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
-              {/* {filteredLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-gray-400" />
-                      <div>
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {new Date(log.timestamp).toLocaleDateString('es-PE')}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {new Date(log.timestamp).toLocaleTimeString('es-PE')}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm text-gray-900 dark:text-white">{log.usuario}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{log.accion}</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
-                        {log.descripcion}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                      {log.modulo}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      {getResultIcon(log.resultado)}
-                      {getResultBadge(log.resultado)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {log.ip}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => openLogDetail(log)}
-                      className="text-[#C01702] hover:text-[#a31200] focus:outline-none focus:ring-2 focus:ring-[#C01702] rounded transition"
-                      title="Ver detalles"
-                      aria-label={`Ver detalles del log ${log.id}`}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))} */}
               {/* // //Modificacion Logs de Auditoria - Monitoreo del Sistema (Reporte PDF de Gestion de usuarios ) (09/07/2025) ------ INICIO ----- */}
       {filteredLogs.map((log) => {
         // Normalizar también para el modal de detalles
@@ -622,148 +640,206 @@ export function AuditLogs() {
       {/* Modal de detalles */}
       {showModal && selectedLog && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-[#C01702] rounded-2xl max-w-md w-full shadow-2xl p-0 relative">
-            {/* Header institucional corporativo */}
-            <div className="flex items-center justify-between bg-[#C01702] rounded-t-2xl px-8 py-5 w-full shadow-sm">
-              <div className="flex items-center gap-4">
-                <Shield className="h-10 w-10 text-white" />
-                <h3 className="text-2xl font-bold text-white tracking-tight">
-                  Detalles
-                </h3>
+
+          {/* Modificacion Logs de Auditoria 11/07/2025 15:24 - Registro en audit_logs, estados de los usuarios (Suspendido/Activo) | INICIO */}
+          <div className="bg-white dark:bg-gray-900 rounded-2xl max-w-sm w-full shadow-2xl p-0 relative">
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-[#C01702] focus:outline-none"
+              aria-label="Cerrar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div className="px-8 py-8">
+              <div className="flex flex-col items-center mb-6">
+                {getResultIcon(selectedLog.resultado)}
+                <span className="mt-2 text-lg font-semibold text-gray-900 dark:text-white">Detalle del Evento</span>
+                <span className="text-xs text-gray-400 mt-1">ID: {selectedLog.id}</span>
               </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-white hover:text-gray-200 text-3xl font-bold focus:outline-none transition"
-                aria-label="Cerrar modal"
-              >
-                ×
-              </button>
-            </div>
-            <div className="bg-white dark:bg-gray-900 rounded-b-2xl px-8 py-8">
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="block text-base font-semibold text-black dark:text-white mb-2">Fecha y Hora</label>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-5 w-5 text-[#C01702] opacity-70" />
-                      {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                      <span className="text-lg text-black dark:text-white">{new Date(selectedLog!.timestamp).toLocaleString('es-PE')}</span>
-                      {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                      {/*<span className="text-lg text-black dark:text-white">{new Date(selectedLog.timestamp).toLocaleString('es-PE')}</span>*/}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-base font-semibold text-black dark:text-white mb-2">Usuario</label>
-                    <div className="flex items-center gap-2">
-                      <User className="h-5 w-5 text-[#C01702] opacity-70" />
-                      {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                      <span className="text-lg text-black dark:text-white">{selectedLog!.usuario}</span>
-{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                      {/*<span className="text-lg text-black dark:text-white">{selectedLog.usuario}</span>*/}
-                    </div>
-                  </div>
+              <div className="space-y-3">
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span className="font-medium text-gray-700 dark:text-gray-200">Fecha/Hora:</span>
+                  <span className="text-right">{new Date(selectedLog.timestamp).toLocaleString('es-PE')}</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="block text-base font-semibold text-black dark:text-white mb-2">Acción</label>
-                    {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                    <span className="text-lg text-black dark:text-white">{selectedLog!.accion}</span>
-{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                    {/*<span className="text-lg text-black dark:text-white">{selectedLog.accion}</span>*/}
-                  </div>
-                  <div>
-                    <label className="block text-base font-semibold text-black dark:text-white mb-2">Módulo</label>
-                    {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                    <span className="text-lg text-black dark:text-white">{selectedLog!.modulo}</span>
-{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                    {/*<span className="text-lg text-black dark:text-white">{selectedLog.modulo}</span>*/}
-                  </div>
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span className="font-medium text-gray-700 dark:text-gray-200">Usuario:</span>
+                  <span className="text-right">{selectedLog.usuario}</span>
                 </div>
-                <div>
-                  <label className="block text-base font-semibold text-black dark:text-white mb-2">Descripción</label>
-                  {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                  <span className="text-lg text-black dark:text-white">{selectedLog!.descripcion}</span>
-{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                  {/* <span className="text-lg text-black dark:text-white">{selectedLog.descripcion}</span> */}
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span className="font-medium text-gray-700 dark:text-gray-200">Acción:</span>
+                  <span className="text-right">{selectedLog.accion}</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div>
-                    <label className="block text-base font-semibold text-black dark:text-white mb-2">Dirección IP</label>
-                    {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                    <span className="text-lg text-black dark:text-white">{selectedLog!.ip}</span>
-{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                    {/* <span className="text-lg text-black dark:text-white">{selectedLog.ip}</span> */}
-                  </div>
-                  <div>
-                    <label className="block text-base font-semibold text-black dark:text-white mb-2">Resultado</label>
-                    <div className="flex items-center gap-2">
-                      {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                      {getResultIcon(selectedLog!.resultado)}
-                      {getResultBadge(selectedLog!.resultado)}
-{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                      {/* {getResultIcon(selectedLog.resultado)}
-                      {getResultBadge(selectedLog.resultado)} */}
-                    </div>
-                  </div>
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span className="font-medium text-gray-700 dark:text-gray-200">Módulo:</span>
+                  <span className="text-right">{selectedLog.modulo}</span>
                 </div>
-                {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                {/* {selectedLog!.detalles && ( */}
-//{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                  {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                {selectedLog!.detalles && (() => {
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span className="font-medium text-gray-700 dark:text-gray-200">Resultado:</span>
+                  <span className="text-right">{getResultBadge(selectedLog.resultado)}</span>
+{/* Modificacion Logs de Auditoria 11/07/2025 15:24 - Registro en audit_logs, estados de los usuarios (Suspendido/Activo) | FIN */}                
+                </div>
+{/* Modificacion Logs de Auditoria 11/07/2025 15:24 - Registro en audit_logs, estados de los usuarios (Suspendido/Activo) | INICIO */}                
+                <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                  <span className="font-medium text-gray-700 dark:text-gray-200">IP:</span>
+                  <span className="text-right">{selectedLog.ip}</span>
+                </div>
+                <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                  <span className="font-medium text-gray-700 dark:text-gray-200 mb-1">Descripción:</span>
+                  <span className="text-left whitespace-pre-line text-gray-600 dark:text-gray-300">{selectedLog.descripcion}</span>
+                </div>
+                {selectedLog.detalles && (() => {
                   let parsed = null;
                   try {
-                    parsed = typeof selectedLog!.detalles === 'string' ? JSON.parse(selectedLog!.detalles) : selectedLog!.detalles;
+                    parsed = typeof selectedLog.detalles === 'string' ? JSON.parse(selectedLog.detalles) : selectedLog.detalles;
                   } catch {
-                    parsed = null;
+                    parsed = selectedLog.detalles;
+                  }
+                  // Traducción de claves técnicas a descripciones legibles
+                  const keyLabels: Record<string, string> = {
+                    estado_id: 'Estado',
+                    nuevo_estado: 'Nuevo estado',
+                    anterior_estado: 'Estado anterior',
+                    user_id: 'Usuario',
+                    usuario: 'Usuario',
+                    rol_id: 'Rol',
+                    rol: 'Rol',
+                    cargo_id: 'Cargo',
+                    cargo: 'Cargo',
+                    cantidad: 'Cantidad',
+                    fecha: 'Fecha',
+                    // Agrega más traducciones según tus campos
+                  };
+                  // Mapas de ids a nombres legibles (pueden venir del backend o ser estáticos)
+                  const rolesMap: Record<string, string> = {
+                    '1': 'Administrador',
+                    '2': 'Trabajador',
+                    '3': 'Invitado',
+                  };
+                  const cargosMap: Record<string, string> = {
+                    '1': 'Jefe de Área',
+                    '2': 'Analista',
+                    '3': 'Soporte',
+                  };
+                  // Traducción de valores de estado comunes
+                  const estadoMap: Record<string, string> = {
+                    '1': 'Activo',
+                    '2': 'Suspendido',
+                    '3': 'Eliminado',
+                    activo: 'Activo',
+                    suspendido: 'Suspendido',
+                    eliminado: 'Eliminado',
+                  };
+                  function renderValue(key: string, value: any, showOld = false) {
+                    if (key.toLowerCase().includes('password') || key.toLowerCase().includes('contraseña')) {
+                      // No mostrar valores de contraseña, solo indicar que fue modificada
+                      return null;
+                    }
+                    if (key.toLowerCase().includes('estado') && (estadoMap[String(value).toLowerCase()] || estadoMap[String(value)])) {
+                      return estadoMap[String(value).toLowerCase()] || estadoMap[String(value)];
+                    }
+                    if (key.toLowerCase().includes('rol') && (rolesMap[String(value)])) {
+                      return rolesMap[String(value)];
+                    }
+                    if (key.toLowerCase().includes('cargo') && (cargosMap[String(value)])) {
+                      return cargosMap[String(value)];
+                    }
+                    if (typeof value === 'object') return JSON.stringify(value);
+                    return String(value);
+{/* Modificacion Logs de Auditoria 11/07/2025 15:24 - Registro en audit_logs, estados de los usuarios (Suspendido/Activo) | FIN */}                    
                   }
                   if (
                     parsed &&
                     parsed.antes &&
-                    //parsed.despues &&
                     Array.isArray(parsed.campos_modificados)
                   ) {
-                    return (
-                      <div>
-                        <label className="block text-base font-semibold text-black dark:text-white mb-2">Campos modificados</label>
-                        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                          <ul className="space-y-2">
-                            {parsed.campos_modificados.map((campo: string) => (
-                              <li key={campo} className="text-sm">
-                                <span className="font-semibold capitalize">{campo.replace('_', ' ')}:</span>{' '}
-                                <span className="line-through text-red-600 mr-2">{parsed.antes[campo]}</span>
-                                <span className="text-green-700 font-semibold">{parsed.despues[campo]}</span>
+{/* Modificacion Logs de Auditoria 11/07/2025 15:24 - Registro en audit_logs, estados de los usuarios (Suspendido/Activo) | INICIO */}                    
+                    // Si hay cambio de contraseña, mostrar solo mensaje genérico
+                    const contienePassword = parsed.campos_modificados.some((campo: string) => campo.toLowerCase().includes('password') || campo.toLowerCase().includes('contraseña'));
+                    if (contienePassword) {
+                      return (
+                        <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                          <span className="font-medium text-gray-700 dark:text-gray-200 mb-1">Campos modificados:</span>
+                          <ul className="space-y-1 mt-1">
+                            <li className="flex items-center gap-2">
+                              <span className="capitalize font-semibold">Contraseña:</span>
+                              <span className="text-blue-700 font-semibold">[La contraseña fue modificada]</span>
+                            </li>
+                            {/* Mostrar otros campos modificados normalmente */}
+                            {parsed.campos_modificados.filter((campo: string) => !(campo.toLowerCase().includes('password') || campo.toLowerCase().includes('contraseña'))).map((campo: string) => (
+                              <li key={campo} className="flex items-center gap-2">
+                                <span className="capitalize font-semibold">{keyLabels[campo] || campo.replace('_', ' ')}:</span>
+                                <span className="line-through text-red-600">{renderValue(campo, parsed.antes[campo], true)}</span>
+                                <span className="text-green-700 font-semibold">{renderValue(campo, parsed.despues[campo], false)}</span>
                               </li>
                             ))}
                           </ul>
                         </div>
+                      );
+                    }
+                    // Si no hay cambio de contraseña, mostrar normalmente
+                    return (
+                      <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                        <span className="font-medium text-gray-700 dark:text-gray-200 mb-1">Campos modificados:</span>
+                        <ul className="space-y-1 mt-1">
+                          {parsed.campos_modificados.map((campo: string) => (
+                            <li key={campo} className="flex items-center gap-2">
+                              <span className="capitalize font-semibold">{keyLabels[campo] || campo.replace('_', ' ')}:</span>
+                              <span className="line-through text-red-600">{renderValue(campo, parsed.antes[campo], true)}</span>
+                              <span className="text-green-700 font-semibold">{renderValue(campo, parsed.despues[campo], false)}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     );
                   }
-                  // Si no es un cambio de usuario, mostrar como texto plano
-                  return (
-                  <div>
-                    <label className="block text-base font-semibold text-black dark:text-white mb-2">Detalles Adicionales</label>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-{/*{/* {/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----*/}
-                      {/* <span className="text-lg text-black dark:text-white">{selectedLog!.detalles}</span> */}
-{/*Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----*/}
-                                            <span className="text-lg text-black dark:text-white">{typeof selectedLog!.detalles === 'string' ? selectedLog!.detalles : JSON.stringify(selectedLog!.detalles)}</span>
+                  // Si no es un cambio de usuario, mostrar detalles adicionales de forma más legible
+                  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.keys(parsed).length > 0) {
+                    return (
+                      <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                        <span className="font-medium text-gray-700 dark:text-gray-200 mb-1">Detalles adicionales:</span>
+                        <table className="w-full text-left border-separate border-spacing-y-1">
+                          <tbody>
+                            {Object.entries(parsed).map(([key, value]) => (
+                              <tr key={key}>
+                                <td className="pr-2 font-semibold text-gray-700 dark:text-gray-200 capitalize">{keyLabels[key] || key.replace('_', ' ')}:</td>
+                                <td className="text-gray-600 dark:text-gray-300 break-all">{renderValue(key, value)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                     
                       </div>
-                    </div>
-                  );
+                    );
+                  }
+                  
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    return (
+                      <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                        <span className="font-medium text-gray-700 dark:text-gray-200 mb-1">Detalles adicionales:</span>
+                        <ul className="list-disc ml-5 mt-1">
+                          {parsed.map((item: any, idx: number) => (
+                            <li key={idx} className="text-gray-600 dark:text-gray-300">{typeof item === 'object' ? JSON.stringify(item) : String(item)}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  }
+{/* Modificacion Logs de Auditoria 11/07/2025 15:24 - Registro en audit_logs, estados de los usuarios (Suspendido/Activo) | FIN */}    
+
+{/* Modificacion Logs de Auditoria 11/07/2025 15:24 - Registro en audit_logs, estados de los usuarios (Suspendido/Activo) | INICIO */}                  
+                  if (parsed && typeof parsed === 'string' && parsed.trim().length > 0) {
+                    return (
+                      <div className="flex flex-col text-sm text-gray-500 dark:text-gray-400">
+                        <span className="font-medium text-gray-700 dark:text-gray-200 mb-1">Detalles adicionales:</span>
+                        <span className="text-left whitespace-pre-line text-gray-600 dark:text-gray-300">{parsed}</span>
+                      </div>
+                    );
+                  }
+                  // Si no hay detalles relevantes
+                  return null;
                 })()}
+{/* Modificacion Logs de Auditoria 11/07/2025 15:24 - Registro en audit_logs, estados de los usuarios (Suspendido/Activo) | FIN */}  
               </div>
-{/*                 {selectedLog.detalles && (
-                  <div>
-                    <label className="block text-base font-semibold text-black dark:text-white mb-2">Detalles Adicionales</label>
-                    <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                      <span className="text-lg text-black dark:text-white">{selectedLog.detalles}</span>
-                    </div>
-                  </div>
-                )}
-              </div> */}
               <div className="flex justify-center mt-8">
                 <button
                   onClick={() => setShowModal(false)}

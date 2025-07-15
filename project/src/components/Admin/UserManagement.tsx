@@ -87,6 +87,7 @@ interface Usuario {
   cargo: string;
   area: string;
   role: 'trabajador' | 'administrador' | 'jefe_area';
+  rol_id: number;
   estado: 'activo' | 'inactivo' | 'suspendido';
   fechaIngreso: string;
   ultimoAcceso: string;
@@ -94,6 +95,22 @@ interface Usuario {
   password?: string;
 }
 export function UserManagement() {
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState('');
+
+  const validateEmail = (email: string) => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
+
+  const validateTelefono = (telefono: string) =>
+  /^\d{7,9}$/.test(telefono);
+
+  const validateDNI = (dni: string) =>
+    /^\d{8}$/.test(dni);
+
+  const validatePassword = (password: string) =>
+    password.length >= 8;
+
   const generarReportePDF = () => {
     const usersToReport = filteredUsuarios;
     const doc = new jsPDF('landscape');
@@ -223,7 +240,18 @@ export function UserManagement() {
   const [showUserModal, setShowUserModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
   const [password, setPassword] = useState('');
+
+  const [email, setEmail] = useState('');
+  //const [telefono, setTelefono] = useState('');
+  //const [dni, setDni] = useState('');
+
+  const [emailValid, setEmailValid] = useState<boolean | null>(null);
+  const [telefonoValid, setTelefonoValid] = useState<boolean | null>(null);
+  const [dniValid, setDniValid] = useState<boolean | null>(null);
+  const [passwordValid, setPasswordValid] = useState<boolean | null>(null);
+
   // Estados para áreas, roles y cargos
   const [areas, setAreas] = useState<any[]>([]);
   const [roles, setRoles] = useState<{ id: number; nombre: string }[]>([]);
@@ -425,22 +453,28 @@ export function UserManagement() {
     const user = usuarios.find(u => u.id === userId);
     if (!user) return;
     const nuevoEstado = (user.estado || '').toLowerCase() === 'activo' ? 'suspendido' : 'activo';
+    if (usuarioSesion?.id === userId) {
+      addToast('❌ No puedes cambiar tu propio estado', 'error');
+      return;
+    }
     // 1. Actualización optimista
     setUsuarios(prev =>
       prev.map(u => u.id === userId ? { ...u, estado: nuevoEstado } : u)
     );
+
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${userId}/estado`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado: nuevoEstado })
+        body: JSON.stringify({ estado: nuevoEstado, solicitante: usuarioSesion?.id })
       });
       if (!res.ok) {
         // Si falló, deshacer la actualización optimista
         setUsuarios(prev =>
           prev.map(u => u.id === userId ? { ...u, estado: user.estado } : u)
         );
-        addToast('No se pudo cambiar el estado del usuario', 'error');
+        const error = await res.json();
+        addToast(error?.error || 'No se pudo cambiar el estado del usuario', 'error');
       } else {
         addToast(`Usuario ${nuevoEstado === 'activo' ? 'activado' : 'suspendido'} correctamente`, 'success');
       }
@@ -453,6 +487,7 @@ export function UserManagement() {
     }
   };
 
+  
   /**
    * Abre el modal para crear o editar usuario.
    * @param user - Usuario a editar (opcional)
@@ -488,6 +523,19 @@ export function UserManagement() {
       }
     }
   }, [showUserModal, selectedUser, isEditing]);
+
+  useEffect(() => {
+    if (isEditing) {
+      setPassword('');
+    }
+  }, [isEditing, selectedUser]);
+
+  useEffect(() => {
+    if (isEditing && selectedUser) {
+      setEmail(selectedUser.email || '');
+    }
+  }, [isEditing, selectedUser]);
+
 
   return (
     <div className="space-y-10">
@@ -804,24 +852,48 @@ export function UserManagement() {
                     name="dni"
                     value={dni}
                     onChange={(e) => {
-                      const value = e.target.value;
-                      if (/^\d{0,8}$/.test(value)) setDni(value);
+                      const val = e.target.value;
+                      if (/^\d{0,8}$/.test(val)) {
+                        setDni(val);
+                        setDniValid(validateDNI(val));
+                      }
                     }}
-                    className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
+                    className={`w-full bg-transparent border-0 border-b text-sm py-1.5 px-0 transition 
+                      ${dniValid === null 
+                        ? 'border-gray-300 dark:border-gray-700' 
+                        : dniValid 
+                        ? 'border-green-500 focus:ring-green-500' 
+                        : 'border-red-500 focus:ring-red-500'} 
+                      text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 
+                      focus:outline-none focus:ring-2`}
                     placeholder="DNI"
                     aria-label="DNI"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Email</label>
-                  <input
-                    type="email"
-                    name="email"
-                    defaultValue={selectedUser?.email || ''}
-                    className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
-                    placeholder="Email"
-                    aria-label="Email"
-                  />
+                  <div className="relative">
+                    <input
+                      type="email"
+                      name="email"
+                      value={email}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEmail(val);
+                        setEmailValid(validateEmail(val));
+                      }}
+                      className={`w-full bg-transparent border-0 border-b text-sm py-1.5 px-0 transition ${
+                        emailValid === null
+                          ? 'border-gray-300 dark:border-gray-700'
+                          : emailValid
+                          ? 'border-green-500 focus:ring-green-500'
+                          : 'border-red-500 focus:ring-red-500'
+                      } text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2`}
+                      placeholder="Email"
+                      aria-label="Email"
+                    />
+                  </div>
+
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-0.5">Teléfono</label>
@@ -830,10 +902,20 @@ export function UserManagement() {
                     name="telefono"
                     value={telefono}
                     onChange={(e) => {
-                      const value = e.target.value;
-                      if (/^\d{0,9}$/.test(value)) setTelefono(value);
+                      const val = e.target.value;
+                      if (/^\d{0,9}$/.test(val)) {
+                        setTelefono(val);
+                        setTelefonoValid(validateTelefono(val));
+                      }
                     }}
-                    className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 transition"
+                    className={`w-full bg-transparent border-0 border-b text-sm py-1.5 px-0 transition
+                      ${telefonoValid === null
+                        ? 'border-gray-300 dark:border-gray-700' 
+                        : telefonoValid 
+                        ? 'border-green-500 focus:ring-green-500' 
+                        : 'border-red-500 focus:ring-red-500'}
+                        text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 
+                        focus:outline-none focus:ring-2`}
                     placeholder="Teléfono"
                     aria-label="Teléfono"
                   />
@@ -844,12 +926,24 @@ export function UserManagement() {
                     <input
                       type={showPassword ? 'text' : 'password'}
                       name="password"
-                      className="w-full bg-transparent border-0 border-b border-gray-300 dark:border-gray-700 focus:border-[#C01702] focus:ring-0 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 py-1.5 px-0 pr-8 transition"
+                      value={password}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPassword(val);
+                        setPasswordValid(validatePassword(val));
+                      }}
+                      className={`w-full bg-transparent border-0 border-b pr-8 text-sm py-1.5 px-0 transition 
+                        ${passwordValid === null 
+                          ? 'border-gray-300 dark:border-gray-700' 
+                          : passwordValid 
+                          ? 'border-green-500 focus:ring-green-500' 
+                          : 'border-red-500 focus:ring-red-500'} 
+                        text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 
+                        focus:outline-none focus:ring-2`}
+                      
                       placeholder="Contraseña"
                       aria-label="Contraseña"
                       autoComplete="new-password"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
                     />
                     <button
                       type="button"
@@ -922,9 +1016,9 @@ export function UserManagement() {
                       const email = (formData.get('email') || '').toString().trim();
                       const telefono = (formData.get('telefono') || '').toString().trim();
                       const passwordValue = password;
+
                       if (!nombre || !apellidos || !dni || !email || !telefono || !selectedAreaId || !selectedCargoId || !selectedRolId) {
                         addToast('Completa todos los campos obligatorios', 'error');
-                                                // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
                         registrarAdvertenciaAuditLog({
                           usuario: email || 'no_proporcionado',
                           accion: 'Campos obligatorios incompletos',
@@ -932,12 +1026,11 @@ export function UserManagement() {
                           descripcion: 'Validación Frontend',
                           detalles: { nombre, apellidos, dni, email, telefono, selectedAreaId, selectedCargoId, selectedRolId }
                         });
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
+
                       if (dni.length !== 8 || !/^\d{8}$/.test(dni)) {
                         addToast('El DNI debe tener exactamente 8 dígitos numéricos', 'error');
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
                         registrarAdvertenciaAuditLog({
                           usuario: email || 'no_proporcionado',
                           accion: 'DNI inválido',
@@ -945,12 +1038,11 @@ export function UserManagement() {
                           descripcion: 'Validación Frontend',
                           detalles: { dni, email }
                         });
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
+
                       if (telefono.length < 7 || telefono.length > 9 || !/^\d+$/.test(telefono)) {
                         addToast('El teléfono debe tener entre 7 y 9 dígitos numéricos', 'error');
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
                         registrarAdvertenciaAuditLog({
                           usuario: email || 'no_proporcionado',
                           accion: 'Teléfono inválido',
@@ -958,13 +1050,12 @@ export function UserManagement() {
                           descripcion: 'Validación Frontend',
                           detalles: { telefono, email }
                         });
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
+
                       const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+$/;
                       if (!nombreRegex.test(nombre)) {
                         addToast('El nombre solo debe contener letras y espacios', 'error');
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
                         registrarAdvertenciaAuditLog({
                           usuario: email || 'no_proporcionado',
                           accion: 'Nombre inválido',
@@ -972,12 +1063,11 @@ export function UserManagement() {
                           descripcion: 'Validación Frontend',
                           detalles: { nombre, email }
                         });
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
+
                       if (!nombreRegex.test(apellidos)) {
                         addToast('El apellido solo debe contener letras y espacios', 'error');
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
                         registrarAdvertenciaAuditLog({
                           usuario: email || 'no_proporcionado',
                           accion: 'Apellido inválido',
@@ -985,13 +1075,12 @@ export function UserManagement() {
                           descripcion: 'Validación Frontend',
                           detalles: { apellidos, email }
                         });
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
+
                       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                       if (!emailRegex.test(email)) {
                         addToast('Correo electrónico no válido', 'error');
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ INICIO -----
                         registrarAdvertenciaAuditLog({
                           usuario: email || 'no_proporcionado',
                           accion: 'Email inválido',
@@ -999,9 +1088,9 @@ export function UserManagement() {
                           descripcion: 'Validación Frontend',
                           detalles: { email }
                         });
-                        // Modificación Logs de Auditoría - Advertencias - Registrar nuevo usuario (09/07/2025) ------ FIN -----
                         return;
                       }
+
                       const userPayload = {
                         nombres: nombre,
                         apellidos,
@@ -1012,6 +1101,7 @@ export function UserManagement() {
                         rol_id: selectedRolId,
                         area_id: selectedAreaId
                       };
+
                       if (!isEditing) {
                         // Crear usuario
                         const createPayload = { ...userPayload, password: passwordValue };
@@ -1038,11 +1128,11 @@ export function UserManagement() {
                               cargo: cargoNombre,
                               area: areaNombre,
                               role: rolNombre,
+                              rol_id: parseInt(selectedRolId, 10),
                               estado: 'activo',
                               fechaIngreso: '',
                               ultimoAcceso: '',
                               permisos: [],
-                              password: passwordValue
                             };
                             setUsuarios(prev => [...prev, usuarioAgregado]);
                             setDni('');
@@ -1058,27 +1148,71 @@ export function UserManagement() {
                           addToast('Error de red al crear usuario', 'error');
                         }
                       } else {
-                        // Editar usuario existente
+                        // Editar usuario
                         try {
+                          const esAutoedicion = usuarioSesion?.id === selectedUser?.id;
+                          if (esAutoedicion && parseInt(selectedRolId, 10) !== selectedUser?.rol_id) {
+                            addToast('No puedes cambiar tu propio rol', 'error');
+                            return;
+                          }
+
+                          const userPayloadFinal: Record<string, any> = {
+                            ...userPayload,
+                            solicitante: usuarioSesion?.id
+                          };
+                          if (estadoSeleccionado) {
+                            userPayloadFinal.estado = estadoSeleccionado;
+                          }
+                          if (passwordValue && passwordValue.trim() !== '') {
+                            userPayloadFinal.password = passwordValue.trim();
+                          }
                           const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${selectedUser?.id}`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...userPayload, password: passwordValue })
-                          });
+                            body: JSON.stringify(userPayloadFinal)
+                          });                          
                           if (res.ok) {
                             addToast('Usuario actualizado correctamente', 'success');
                             setShowUserModal(false);
-                            // Actualizar usuario en el frontend
-                            setUsuarios(prev => prev.map(u => u.id === selectedUser?.id ? { ...u, ...userPayload, password: passwordValue } : u));
+
+                            const rolNombre = roles.find(r => String(r.id) === String(selectedRolId))?.nombre.toLowerCase() as Usuario['role'];
+                            const cargoNombre = cargos.find(c => String(c.id) === String(selectedCargoId))?.nombre ?? '';
+                            const areaNombre = areas.find(a => String(a.id) === String(selectedAreaId))?.nombre ?? '';
+
+                            setUsuarios(prev =>
+                              prev.map(u =>
+                                u.id === selectedUser?.id
+                                  ? {
+                                      ...u,
+                                      nombres: userPayload.nombres,
+                                      apellidos: userPayload.apellidos,
+                                      email: userPayload.email,
+                                      telefono: userPayload.telefono,
+                                      dni: userPayload.dni,
+                                      role: rolNombre,
+                                      rol_id: parseInt(selectedRolId, 10),
+                                      cargo: cargoNombre,
+                                      area: areaNombre
+                                    }
+                                  : u
+                              )
+                            );
+                            setPassword('');
                           } else {
                             const data = await res.json();
-                            addToast(data.error || 'Error al actualizar usuario', 'error');
+                            if (res.status === 403 && data.error?.includes('rol')) {
+                              addToast('🚫 No puedes cambiar tu propio rol mientras estás autenticado.', 'error');
+                            } else {
+                              addToast(data.error || 'Error al actualizar usuario', 'error');
+                            }
                           }
+                          
                         } catch {
                           addToast('Error de red al actualizar usuario', 'error');
                         }
                       }
                     }}
+
                     className="px-6 py-2 bg-[#C01702] hover:bg-[#a31200] text-white rounded-lg font-semibold text-base transition focus:outline-none focus:ring-2 focus:ring-[#C01702] flex items-center gap-2 shadow-none"
                   >
                     <UserCheck className="h-5 w-5 text-white" />

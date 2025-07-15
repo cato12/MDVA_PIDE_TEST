@@ -15,6 +15,14 @@ app.use(cors());
 app.use(express.json());
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+//Modificacion - Implementacion de API Factiliza 14/07/2025 | INICIO
+// Importar router de consulta DNI y RUC y montar endpoints después de inicializar app
+import { router as dniApiRouter } from './api/dniApi.js';
+import { router as rucApiRouter } from './api/rucApi.js';
+app.use('/api/dni', dniApiRouter);
+app.use('/api/ruc', rucApiRouter);
+//Modificacion - Implementacion de API Factiliza 14/07/2025 | FIN
+
 // Routes de estado de usuario
 import userStatusRoutes from './routes/userStatus.js';
 app.use(userStatusRoutes(pool));
@@ -24,44 +32,44 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 app.post('/login', async (req, res) => {
   const { emailOrDni, password } = req.body;
-  if (!emailOrDni || !password){
+  if (!emailOrDni || !password) {
     return res.status(400).json({ error: 'Faltan credenciales' });
   }
+
   const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip || '';
   const userKey = emailOrDni.toLowerCase();
   const MAX_ATTEMPTS = 3;
+
   try {
     const { rows } = await pool.query(`
       SELECT u.id, u.nombres, u.apellidos, u.dni, u.email, u.telefono,
-              u.password, u.estado_id, c.nombre AS cargo_nombre, a.nombre AS area_nombre,
-              LOWER(r.nombre) AS rol
+            u.password, u.estado_id, c.nombre AS cargo_nombre, a.nombre AS area_nombre,
+            LOWER(r.nombre) AS rol
       FROM users u
       LEFT JOIN cargos c ON u.cargo_id = c.id
       LEFT JOIN areas a ON u.area_id = a.id
       LEFT JOIN roles r ON u.rol_id = r.id
-      WHERE u.email = $1 OR u.dni = $1`,
-      [emailOrDni]
-    );
+      WHERE u.email = $1 OR u.dni = $1
+    `, [emailOrDni]);
+
     if (rows.length === 0) {
-      await pool.query(
-        `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
-        VALUES ($1, 'login', 'autenticacion', 'Intento fallido de login', $2, 'fallido', 'Credenciales incorrectas')`,
-        [emailOrDni, ip]
-      );
+      await pool.query(`
+        INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+        VALUES ($1, 'login', 'autenticacion', 'Intento fallido de login', $2, 'fallido', 'Credenciales incorrectas')
+      `, [emailOrDni, ip]);
       return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
     }
+
     const user = rows[0];
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       const { count, warned } = recordFailedAttempt(userKey);
       if (count >= MAX_ATTEMPTS && !warned) {
-        await pool.query(
-          `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
-          VALUES ($1, 'login_bloqueado', 'autenticacion', 'Superó el máximo de intentos', $2, 'advertencia', 'Revisar actividad sospechosa')`,
-          [emailOrDni, ip]
-        );
+        await pool.query(`
+          INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+          VALUES ($1, 'login_bloqueado', 'autenticacion', 'Superó el máximo de intentos', $2, 'advertencia', 'Revisar actividad sospechosa')
+        `, [emailOrDni, ip]);
         markWarned(userKey);
-        console.log(`⚠️ Advertencia registrada para ${userKey}`);
         return res.status(401).json({
           success: false,
           error: 'Credenciales incorrectas',
@@ -70,184 +78,33 @@ app.post('/login', async (req, res) => {
       }
       return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
     }
+
     if (user.estado_id === 2) {
       return res.status(403).json({ success: false, error: 'Cuenta suspendida' });
     }
 
-    // Login válido
     await pool.query('UPDATE users SET ultimo_acceso = NOW() WHERE id = $1', [user.id]);
-    const refreshed = await pool.query(`
-      SELECT u.*, c.nombre AS cargo_nombre, LOWER(r.nombre) AS rol
-      FROM users u
-      LEFT JOIN cargos c ON u.cargo_id = c.id
-      LEFT JOIN roles r ON u.rol_id = r.id
-      WHERE u.id = $1`,
-      [user.id]
-    );
-    const { password: _, ...userData } = refreshed.rows[0];
-    await pool.query(
-      `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
-      VALUES ($1, 'login', 'autenticacion', 'Inicio de sesión exitoso', $2, 'exitoso', null)`,
-      [user.email || user.dni, ip]
-    );
+
+    const { password: _, ...userData } = user;
+
+    // Mapear rol para frontend
+    userData.rol = user.rol === 'usuario' ? 'trabajador' : 'administrador';
+
+    await pool.query(`
+      INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+      VALUES ($1, 'login', 'autenticacion', 'Inicio de sesión exitoso', $2, 'exitoso', null)
+    `, [user.email || user.dni, ip]);
+
     resetAttempts(userKey);
+
     return res.json({ success: true, user: userData });
+
   } catch (err) {
     console.error('Error en /login:', err);
     return res.status(500).json({ error: 'Error en el servidor' });
   }
 });
 
-// app.post('/login', async (req, res) => {
-//   const { emailOrDni, password } = req.body;
-//   if (!emailOrDni || !password) {
-//     return res.status(400).json({ error: 'Faltan credenciales' });
-//   }
-//   try {
-//     const result = await pool.query(
-//       `SELECT u.id, u.*, c.nombre AS cargo_nombre, LOWER(r.nombre) AS rol
-//       FROM users u
-//       LEFT JOIN cargos c ON u.cargo_id = c.id
-//       LEFT JOIN roles r ON u.rol_id = r.id
-//       WHERE (u.email = $1 OR u.dni = $1) AND u.password = $2`,
-//       [emailOrDni, password]
-//     );
-
-//     if (result.rows.length === 0) {
-//       // Lógica de intentos fallidos
-//       if (!global.failedLoginAttempts) global.failedLoginAttempts = {};
-//       const userKey = String(emailOrDni).toLowerCase();
-//       const MAX_ATTEMPTS = 3;
-//       const now = Date.now();
-//       if (!global.failedLoginAttempts[userKey]) {
-//         global.failedLoginAttempts[userKey] = { count: 0, last: now, warned: false };
-//       }
-//       global.failedLoginAttempts[userKey].count++;
-//       global.failedLoginAttempts[userKey].last = now;
-
-//       // Capturar IP real
-//       const ip =
-//         req.headers['x-forwarded-for']?.toString().split(',').shift() ||
-//         req.socket?.remoteAddress ||
-//         req.ip ||
-//         '';
-
-//       // Registrar intento fallido de login (fallido)
-//       try {
-//         await pool.query(
-//           `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
-//            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-//           [
-//             emailOrDni,
-//             'login',
-//             'autenticacion',
-//             'Intento de inicio de sesión fallido',
-//             ip,
-//             'fallido',
-//             'Credenciales incorrectas'
-//           ]
-//         );
-//       } catch (e) {
-//         console.error('Error al registrar log de login fallido:', e);
-//       }
-
-//       // Registrar advertencia solo cuando se llega al límite y no se ha registrado antes
-//       if (
-//         global.failedLoginAttempts[userKey].count === MAX_ATTEMPTS &&
-//         !global.failedLoginAttempts[userKey].warned
-//       ) {
-//         console.log(`Registrando advertencia para ${userKey} (intentos: ${global.failedLoginAttempts[userKey].count})`);
-//         try {
-//           await pool.query(
-//             `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
-//              VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
-//             [
-//               emailOrDni,
-//               'login_bloqueado',
-//               'autenticacion',
-//               `Usuario superó el máximo de ${MAX_ATTEMPTS} intentos fallidos de inicio de sesión`,
-//               ip,
-//               'advertencia',
-//               `El usuario ha fallado ${MAX_ATTEMPTS} veces consecutivas el login. Se recomienda revisar actividad.`
-//             ]
-//           );
-//           global.failedLoginAttempts[userKey].warned = true;
-//           console.log(`Advertencia registrada y warned=true para ${userKey}`);
-//         } catch (e) {
-//           console.error('Error al registrar log de advertencia de login bloqueado:', e);
-//         }
-//       } else {
-//         if (global.failedLoginAttempts[userKey].count === MAX_ATTEMPTS) {
-//           console.log(`Advertencia YA registrada para ${userKey}, no se repite.`);
-//         } else {
-//           console.log(`Intentos fallidos para ${userKey}: ${global.failedLoginAttempts[userKey].count}`);
-//         }
-//       }
-//       return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
-//     }
-
-// //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
-
-//     const userRow = result.rows[0];
-
-//     // Actualizar último acceso
-//     await pool.query(
-//       'UPDATE users SET ultimo_acceso = NOW() WHERE id = $1',
-//       [userRow.id]
-//     );
-
-//     // Obtener de nuevo datos actualizados
-//     const refreshed = await pool.query(
-//       `SELECT u.*, c.nombre AS cargo_nombre, LOWER(r.nombre) AS rol
-//       FROM users u
-//       LEFT JOIN cargos c ON u.cargo_id = c.id
-//       LEFT JOIN roles r ON u.rol_id = r.id
-//       WHERE u.id = $1`,
-//       [userRow.id]
-//     );
-
-//     // ...existing code...
-
-
-//     const { password: _, ...userData } = refreshed.rows[0];
-
-// //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
-
-//     // Capturar IP real y convertir ::1 a 127.0.0.1
-//     let ip =
-//       req.headers['x-forwarded-for']?.toString().split(',').shift() ||
-//       req.socket?.remoteAddress ||
-//       req.ip ||
-//       '';
-//     if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
-//     // Registrar login exitoso
-//     try {
-//       await pool.query(
-//         `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
-//          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-//         [
-//           userRow.email || userRow.dni,
-//           'login',
-//           'autenticacion',
-//           'Inicio de sesión exitoso',
-//           ip,
-//           'exitoso',
-//           null
-//         ]
-//       );
-//     } catch (e) {
-//       console.error('Error al registrar log de login exitoso:', e);
-//     }
-
-//     res.json({ success: true, user: userData });
-
-//   } catch (err) {
-//     console.error('Error en /login:', err);
-//     res.status(500).json({ error: 'Error en el servidor' });
-//   }
-
-//   //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
-// });
 
 async function sendSecurityAlert(user, fails) {
   const html = `
@@ -282,7 +139,7 @@ app.post('/users', async (req, res) => {
       if (!safeEmail) safeEmail = 'no_proporcionado';
       await pool.query(
         `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+        VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
         [
           safeEmail,
           'crear_usuario',
@@ -298,7 +155,7 @@ app.post('/users', async (req, res) => {
     }
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
-//Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
+  //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
   
   if (![nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password].every(v => v))
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
@@ -322,7 +179,7 @@ app.post('/users', async (req, res) => {
     const { cargo_nombre, area_nombre } = info.rows[0];
     await sendWelcomeEmail(newUser, cargo_nombre, area_nombre);
     console.log(`📧 Correo bienvenido enviado a ${newUser.email}`);
-    res.status(201).json({ success: true, user: newUser });
+    
   
   //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----    
     // Registrar en audit_logs (éxito)
@@ -345,8 +202,9 @@ app.post('/users', async (req, res) => {
     } catch (e) {
       console.error('Error al registrar log de creación de usuario:', e);
     }
-    res.status(201).json({ success: true, user: result.rows[0] });
-//Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
+    res.status(201).json({ success: true, user: newUser });
+    //res.status(201).json({ success: true, user: result.rows[0] });
+  //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
   } catch (err) {
     console.error('Error al registrar usuario:', err);
     //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
@@ -400,9 +258,13 @@ app.post('/users', async (req, res) => {
         console.error('Error al registrar log de error de creación de usuario (conexión separada):', e, 'Datos:', { email, nombres, apellidos, dni });
       }
     })();
-    res.status(500).json({ error: 'Error al registrar usuario' });
+    //res.status(500).json({ error: 'Error al registrar usuario' });
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error al registrar usuario' });
+    }
   }
 });
+
 //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
    // res.status(500).json({ error: 'Error al registrar usuario' });
  // }
@@ -437,7 +299,15 @@ async function sendWelcomeEmail(user, cargo, area) {
 // --- ACTUALIZAR USUARIO con gestión de estado y cambio de contraseña ---
 app.put('/users/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, password, estado } = req.body;
+  const {
+    nombres, apellidos, email, telefono, dni,
+    cargo_id, rol_id, area_id, password, estado,
+    solicitante
+  } = req.body;
+
+  if (!solicitante) {
+    return res.status(400).json({ error: 'Campo "solicitante" requerido' });
+  }
   try {
     const prevRes = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     if (!prevRes.rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -445,14 +315,24 @@ app.put('/users/:id', async (req, res) => {
     // Validaciones
     if (!emailRegex.test(email))
       return res.status(400).json({ error: 'Formato de correo inválido' });
+
     let hashedPwd = prev.password;
     let pwdChanged = false;
-    if (password && !(await bcrypt.compare(password, prev.password))) {
-      if (!schema.validate(password))
+    if (typeof password === 'string' && password.trim()) {
+      if (!schema.validate(password)) {
         return res.status(400).json({ error: 'Contraseña insegura' });
-      hashedPwd = await bcrypt.hash(password, 10);
-      pwdChanged = true;
+      }
+      const isSame = await bcrypt.compare(password, prev.password);
+      if (!isSame) {
+        hashedPwd = await bcrypt.hash(password, 10);
+        pwdChanged = true;
+      }
     }
+
+    if (String(id) === String(solicitante) && String(prev.rol_id) !== String(rol_id)) {
+      return res.status(403).json({ error: 'No puedes cambiar tu propio rol' });
+    }
+
     const fields = [nombres, apellidos, email, telefono, dni, cargo_id, rol_id, area_id, hashedPwd];
     let query = `
       UPDATE users SET nombres=$1,apellidos=$2,email=$3,telefono=$4,
@@ -464,7 +344,7 @@ app.put('/users/:id', async (req, res) => {
     fields.push(id);
     query += ` WHERE id = $${fields.length} RETURNING *`;
     const updated = (await pool.query(query, fields)).rows[0];
-    res.json({ success: true, user: updated });
+    //res.json({ success: true, user: updated });
     const tasks = [];
     if (estado && prev.estado_id !== updated.estado_id) {
       tasks.push(sendStateChangeEmail(updated, estado));
@@ -486,7 +366,8 @@ app.put('/users/:id', async (req, res) => {
     if (String(prev.cargo_id) !== String(cargo_id)) cambios.push('cargo_id');
     if (String(prev.rol_id) !== String(rol_id)) cambios.push('rol_id');
     if (String(prev.area_id) !== String(area_id)) cambios.push('area_id');
-    if (prev.password !== password) cambios.push('password');
+    //if (prev.password !== password) cambios.push('password');
+    if (pwdChanged) cambios.push('password');
 
     // Registrar log solo si hubo cambios
     if (cambios.length > 0) {
@@ -506,12 +387,16 @@ app.put('/users/:id', async (req, res) => {
         ]
       );
     }
-    res.json({ success: true, user: updated });
+
+    //res.json({ success: true, user: updated });
     //Modificacion Logs de Auditoria - Registro de edicion de usuario (09/07/2025) ------ FIN -----  
     // Ejecución de tareas asíncronas sin bloquear la respuesta
     Promise.all(tasks).catch(e =>
       console.error('Error al enviar notificaciones de edición:', e)
     );
+
+    const { password: _, ...userWithoutPassword } = updated;
+    res.json({ success: true, user: userWithoutPassword });
 
   } catch (err) {
     console.error('Error al actualizar usuario:', err);
@@ -562,7 +447,7 @@ async function sendPasswordChangeEmail(user) {
 // Endpoint para eliminar un usuario físicamente
 app.delete('/users/:id', async (req, res) => {
   const { id } = req.params;
-  try {
+/*   try {
     const result = await pool.query(
       'DELETE FROM users WHERE id = $1 RETURNING *',
       [id]
@@ -571,7 +456,63 @@ app.delete('/users/:id', async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
     const deletedUser = result.rows[0];
+    res.json({ success: true, user: deletedUser }); */
+
+  // Modificacion Logs de Auditoria 11/07/2025 15:31 - Registro en audit_logs, eliminacion de usuarios | INICIO
+  try {
+    // Obtener usuario antes de eliminar
+    const prevResult = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    if (prevResult.rowCount === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const prev = prevResult.rows[0];
+
+    // Eliminar usuario
+    const result = await pool.query(
+      'DELETE FROM users WHERE id = $1 RETURNING *',
+      [id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    const deletedUser = result.rows[0];
+
+    // Registrar en audit_logs con depuración
+    let ip = req.headers['x-forwarded-for']?.toString().split(',').shift() || req.socket?.remoteAddress || req.ip || '';
+    if (ip === '::1' || ip === '::ffff:127.0.0.1') ip = '127.0.0.1';
+    const accion = 'Usuario Eliminado';
+    const descripcion = `Usuario eliminado del sistema`;
+    const auditLogParams = [
+      prev.email || prev.dni || '',
+      accion,
+      'usuarios',
+      descripcion,
+      ip,
+      'exitoso',
+      JSON.stringify({ usuario: prev })
+    ];
+    console.log('[AUDIT-DEBUG] Intentando registrar en audit_logs (eliminación):', {
+      usuario: auditLogParams[0],
+      accion: auditLogParams[1],
+      modulo: auditLogParams[2],
+      descripcion: auditLogParams[3],
+      ip: auditLogParams[4],
+      resultado: auditLogParams[5],
+      detalles: auditLogParams[6]
+    });
+    try {
+      const auditResult = await pool.query(
+        `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+        auditLogParams
+      );
+      console.log('[AUDIT-DEBUG] Registro en audit_logs (eliminación) exitoso:', auditResult.rowCount);
+    } catch (auditErr) {
+      console.error('[AUDIT-DEBUG] Error al registrar en audit_logs (eliminación):', auditErr);
+    }
+
     res.json({ success: true, user: deletedUser });
+
+// Modificacion Logs de Auditoria 11/07/2025 15:31 - Registro en audit_logs, eliminacion de usuarios | FIN  
+    
     try {
       await sendEmail({
         to: deletedUser.email,
