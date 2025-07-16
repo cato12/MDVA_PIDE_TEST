@@ -1,6 +1,8 @@
 {
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "express-rate-limit": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
     "node-fetch": "^3.3.2",

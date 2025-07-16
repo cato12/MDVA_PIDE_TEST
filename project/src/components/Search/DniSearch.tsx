@@ -351,7 +351,7 @@ export function DniSearch() {
         - Input y botón de consulta
         - Ejemplos y advertencia de privacidad
       */}
-      <div className="min-h-[80vh] py-12 space-y-8 flex flex-col items-center font-sans" style={{ fontFamily: 'Montserrat, Inter, sans-serif' }}>
+      <div className="min-h-[80vh] py-12 flex flex-col justify-center items-center space-y-8 font-sans" style={{ fontFamily: 'Montserrat, Inter, sans-serif' }}>
         <div className="relative bg-gradient-to-br from-[#fff7f6] via-white to-[#f9f9f9] dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 rounded-3xl p-0 shadow-xl border-2 border-gray-200 dark:border-gray-700 w-full max-w-2xl mx-auto overflow-hidden">
           {/* Encabezado destacado */}
           <div className="bg-[#C01702] bg-opacity-95 px-10 py-7 rounded-t-2xl flex flex-col items-center border-b-4 border-gray-200 dark:border-gray-700 shadow-md font-sans" style={{ fontFamily: 'Montserrat, Inter, sans-serif' }}>
@@ -392,7 +392,18 @@ export function DniSearch() {
                   onClick={() => {
                     setSearchType('nombre');
                     setSearchTerm('');
-                    setError('La búsqueda por nombre aún no está disponible.');
+                    //setError('La búsqueda por nombre aún no está disponible.');
+                    <div className="min-h-[28px] flex items-center">
+                      {error && (
+                        <div className="flex items-center gap-2 text-[#C01702]">
+                          <AlertCircle className="h-5 w-5" />
+                          <span className="text-base font-medium">{error}</span>
+                        </div>
+                      )}
+                      {searchType === 'nombre' && !error && (
+                        <span className="text-xs text-[#C01702]">Actualmente solo está disponible la búsqueda real por RUC.</span>
+                      )}
+                    </div>
                   }}
                     className={`flex flex-col items-center justify-center px-12 py-8 rounded-2xl border-2 shadow-md transition-all duration-150 cursor-pointer w-56 h-40 text-xl font-semibold tracking-tight
                       ${searchType === 'nombre'
@@ -469,12 +480,12 @@ export function DniSearch() {
             </div>
 
           {/* Ejemplos y advertencia de privacidad */}
-      <div className="mt-8 text-xs text-gray-500 dark:text-gray-400 border-t pt-4 border-gray-200 dark:border-gray-700 text-center pb-6 px-2">
-        <p className="text-xs mt-1 py-2">
-          <Shield className="h-3 w-3 inline mr-1" />
-          LÍMITE DE USO: 3 CONSULTAS POR SEMANA.
-        </p>
-      </div>
+          <div className="my-10 flex justify-center">
+            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs font-medium font-sans" style={{ fontFamily: 'Montserrat, Inter, sans-serif' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 100-16 8 8 0 000 16z" /></svg>
+              LÍMITE DE USO: 3 CONSULTAS POR SEMANA.
+            </div>
+          </div>
         </div>
       </div>
       {/* Modal de resultados de búsqueda por nombre o DNI (portal, fondo oscuro desenfocado, z-index alto) */}

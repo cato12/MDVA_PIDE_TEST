@@ -24,19 +24,16 @@ import {
   Users,     // Icono de usuarios
   Activity,  // Icono de logs/monitoreo
   Clock,     // Icono de reloj (timer)
-  Power      // Icono de cerrar sesión
+  Power,     // Icono de cerrar sesión
+  FileText,  // Icono de Servicio A
+  TrendingUp, // Icono de Servicio B
+  Calendar   // Icono de Servicio C
 } from 'lucide-react';
+
 import { useAuth } from '../../context/AuthContext'; // Contexto de autenticación
 import logoMDVA from '/imagenes/logo_mdva_rojo.png'; // Logo institucional
 
 const SESSION_KEY = 'mdva_session_expiry';
-
-// Menú para trabajadores (acceso limitado)
-const trabajadorMenuItems = [
-  { path: '/dashboard', label: 'Panel Principal', icon: Home },
-  { path: '/busqueda-ruc', label: 'Búsqueda por RUC', icon: Building },
-  { path: '/busqueda-dni', label: 'Búsqueda por DNI', icon: Search }
-];
 
 // Menú para administradores (acceso completo)
 const adminMenuItems = [
@@ -44,6 +41,37 @@ const adminMenuItems = [
   { path: '/admin/usuarios', label: 'Gestión de Usuarios', icon: Users },
   { path: '/admin/logs', label: 'Monitoreo del Sistema', icon: Activity }
 ];
+
+// LÓGICA PARA INICIO DE SESIÓN DINÁMICO - SERVICIOS POR USUARIO (ID) - 15/07/2025 | INICIO
+const serviciosPorUsuarioId: Record<number, { path: string; label: string; icon: any }[]> = {
+  39: [ // Usuario 39
+    { path: '/dashboard', label: 'Panel Principal', icon: Home },
+    { path: '/busqueda-dni', label: 'Búsqueda por DNI', icon: Search },
+    { path: '/busqueda-ruc', label: 'Búsqueda por RUC', icon: Search },
+    { path: '/servicio-a', label: 'Servicio A', icon: FileText }
+  ],
+  40: [ // Usuario 40
+    { path: '/dashboard', label: 'Panel Principal', icon: Home },
+    { path: '/busqueda-dni', label: 'Búsqueda por DNI', icon: Search },
+    { path: '/busqueda-ruc', label: 'Búsqueda por RUC', icon: Search },
+    { path: '/servicio-c', label: 'Servicio C', icon: Calendar }
+  ],
+  41: [ // Usuario 41
+    { path: '/dashboard', label: 'Panel Principal', icon: Home },
+    { path: '/busqueda-dni', label: 'Búsqueda por DNI', icon: Search },
+    { path: '/busqueda-ruc', label: 'Búsqueda por RUC', icon: Search }
+    
+  ],
+  61: [ // Usuario 61
+    { path: '/dashboard', label: 'Panel Principal', icon: Home },
+    { path: '/busqueda-dni', label: 'Búsqueda por DNI', icon: Search },
+    { path: '/busqueda-ruc', label: 'Búsqueda por RUC', icon: Search }
+    
+  ]
+  // ...agrega más usuarios y servicios según tu base de datos
+};
+
+// LÓGICA PARA INICIO DE SESIÓN DINÁMICO - SERVICIOS POR USUARIO - 15/07/2025 | FIN
 
 /**
  * Componente Sidebar principal del sistema.
@@ -67,7 +95,7 @@ export function Sidebar() {
     return 15 * 60;
   });
 
-    useEffect(() => {
+  useEffect(() => {
     if (timeLeft <= 0) {
       logout();
       localStorage.removeItem(SESSION_KEY);
@@ -88,8 +116,18 @@ export function Sidebar() {
     return () => clearInterval(interval);
   }, [timeLeft, logout]);
 
-  
-  
+// LÓGICA PARA INICIO DE SESIÓN DINÁMICO - SERVICIOS POR USUARIO - 15/07/2025 | INICIO 
+  // Selección dinámica de menú según área (si es admin, usa adminMenuItems)
+  let menuItems = adminMenuItems;
+  if (user?.rol !== 'administrador') {
+    const idusuario = Number(user?.id); // Asegura que sea un número
+    menuItems = (!isNaN(idusuario) && serviciosPorUsuarioId[idusuario]) || [
+      { path: '/dashboard', label: 'Panel Principal', icon: Home }
+    ];
+  }
+
+// LÓGICA PARA INICIO DE SESIÓN DINÁMICO - SERVICIOS POR USUARIO - 15/07/2025 | FIN
+
   /**
    * Formatea segundos a mm:ss para mostrar el timer.
    * @param seconds - Segundos restantes
@@ -102,7 +140,6 @@ export function Sidebar() {
    * El menú se determina según el rol ('administrador' o 'trabajador').
    */
   
-  const menuItems = user?.rol === 'administrador' ? adminMenuItems : trabajadorMenuItems;
 
   return (
     <aside

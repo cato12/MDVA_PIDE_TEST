@@ -7,6 +7,7 @@ import PasswordValidator from 'password-validator';
 import { sendEmail } from './utils/mailer.js';
 import { recordFailedAttempt, markWarned, resetAttempts } from './utils/loginAttempts.js';
 import schema from './utils/passwordPolicy.js'; // esquema correcto
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 const app = express();
@@ -96,8 +97,13 @@ app.post('/login', async (req, res) => {
     `, [user.email || user.dni, ip]);
 
     resetAttempts(userKey);
+    const token = jwt.sign(
+      { id: user.id, email: user.email, rol: userData.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
 
-    return res.json({ success: true, user: userData });
+    return res.json({ success: true, user: userData, token });
 
   } catch (err) {
     console.error('Error en /login:', err);

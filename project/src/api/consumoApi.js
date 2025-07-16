@@ -64,8 +64,16 @@ export async function consultarRUC(ruc) {
 export async function consultarDNI(dni) {
   if (!dni || typeof dni !== 'string') throw new Error('DNI inválido');
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  
+  const token = localStorage.getItem('token');
+
   try {
-    const res = await fetch(`${API_URL}/api/dni/${dni}`);
+    const res = await fetch(`${API_URL}/api/dni/${dni}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || 'Error consultando DNI');
@@ -74,6 +82,5 @@ export async function consultarDNI(dni) {
   } catch (err) {
     return { error: err.message };
   }
-
-  
 }
+

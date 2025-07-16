@@ -148,7 +148,7 @@ export function TrabajadorDashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-10">
         {/*
           Consultas Recientes:
           - Lista de búsquedas recientes de RUC/DNI.

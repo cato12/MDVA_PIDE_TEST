@@ -2,14 +2,27 @@
 
 import express from 'express';
 export const router = express.Router();
+import { verifyAuth } from '../middlewares/auth.js';
+import rateLimit from 'express-rate-limit';
+
+const dniLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 5, // Máx 5 solicitudes por IP por minuto
+  message: { error: 'Demasiadas consultas. Intente en unos segundos.' }
+});
 
 // GET /api/dni/:dni
-router.get('/:dni', async (req, res) => {
+router.get('/:dni', verifyAuth, dniLimiter, async (req, res) => {
   const { dni } = req.params;
   try {
     const data = await consultarDNI(dni);
     // Log de depuración para ver la estructura real de la respuesta
-    console.log('Respuesta cruda API externa:', JSON.stringify(data, null, 2));
+
+    //console.log('Respuesta cruda API externa:', JSON.stringify(data, null, 2));
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[DNI] Consulta respuesta:', JSON.stringify(data, null, 2));
+    }
+
     if (data.error) {
       return res.status(400).json({ error: data.error });
     }
@@ -67,12 +80,7 @@ router.get('/:dni', async (req, res) => {
   }
 });
 
-
-
-// Ejemplo de integración con API externa de consulta DNI
-// Puedes adaptar la URL y headers según el proveedor real
-
-
+//  integración con API externa de consulta DNI
 /**
  * Consulta datos de una persona por DNI usando una API externa.
  * @param {string} dni - Número de DNI a consultar

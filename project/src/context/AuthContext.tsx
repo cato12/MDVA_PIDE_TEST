@@ -60,6 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           rol: data.user.rol,
           isActive: true
         };
+
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+        }
         setUser(user);
         localStorage.setItem('municipal_user', JSON.stringify(user));
         const expiry = Date.now() + 15 * 60 * 1000;
@@ -108,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   setUser(null);
     localStorage.removeItem('municipal_user');
     localStorage.removeItem('mdva_session_expiry');
+    localStorage.removeItem('token');
     //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
     setTimeout(() => { isLoggingOut = false; }, 1000); // Permitir logout de nuevo tras 1s
     //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
