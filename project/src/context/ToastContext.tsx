@@ -18,9 +18,6 @@ interface ToastContextType {
   removeToast: (id: string) => void;
 }
 
-
-
-
 //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ INICIO-----
 // Contexto de toasts
 export const ToastContext = createContext<ToastContextType | undefined>(undefined);

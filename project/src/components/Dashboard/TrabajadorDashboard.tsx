@@ -14,95 +14,187 @@
  *
  * @module TrabajadorDashboard
  */
-import React from 'react';
-import {
-  Search, Building, User, FileText, Clock, TrendingUp, Activity, Calendar
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search, Building, User, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
+// import Joyride, { Step, CallBackProps, STATUS } from 'react-joyride';
+// import type { ComponentType } from 'react';
 
-/**
- * Componente principal del dashboard de trabajador.
- * Muestra métricas, consultas recientes y resumen visual.
- */
+// const JoyrideComponent = Joyride as unknown as ComponentType<any>;
+
+
 export function TrabajadorDashboard() {
   const { user } = useAuth();
+  const [recentSearches, setRecentSearches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [runTutorial, setRunTutorial] = useState(false);
+  // const steps: Step[] = [
+  //   {
+  //     target: 'h1', // Encabezado de bienvenida
+  //     content: 'Bienvenido al panel del trabajador. Aquí verás un resumen de tu actividad.',
+  //   },
+  //   {
+  //     target: '[aria-label="Consultas RUC Realizadas"]',
+  //     content: 'Aquí verás cuántas consultas RUC has realizado.',
+  //   },
+  //   {
+  //     target: '[aria-label="Consultas DNI Realizadas"]',
+  //     content: 'Este bloque muestra las consultas realizadas por DNI.',
+  //   },
+  //   {
+  //     target: '[aria-label="Total Consultas"]',
+  //     content: 'Aquí se muestra el total acumulado de consultas.',
+  //   },
+  //   {
+  //     target: 'h2', // Título "Consultas Recientes"
+  //     content: 'Aquí se listan las consultas recientes que hiciste. Puedes revisarlas rápidamente.',
+  //   },
+  //   {
+  //     target: '[aria-label="Consultas DNI Realizadas"]',
+  //     content: 'Este bloque muestra las consultas realizadas por DNI.',
+  //   },
+  //   {
+  //     target: '[aria-label="Total Consultas"]',
+  //     content: 'Aquí se muestra el total acumulado de consultas.',
+  //   },
+  //   {
+  //     target: 'h2', // Título "Consultas Recientes"
+  //     content: 'Aquí se listan las consultas recientes que hiciste. Puedes revisarlas rápidamente.',
+  //   }
+  // ];
+
+  // useEffect(() => {
+  //   const yaVisto = localStorage.getItem('tutorialDashboardVisto');
+  //   if (!yaVisto) {
+  //     setRunTutorial(true);
+  //     localStorage.setItem('tutorialDashboardVisto', 'true');
+  //   }
+  // }, []);
+
+  useEffect(() => {
+    const fetchRecentSearches = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+
+        const token = localStorage.getItem('token');
+        const res = await fetch('/api/audit-logs/mis-consultas', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        });
+        if (!res.ok) throw new Error('No se pudieron obtener las consultas recientes');
+        let data;
+        let text;
+        try {
+          text = await res.text();
+          data = JSON.parse(text);
+        } catch (err) {
+          setError('Error inesperado al procesar la respuesta del servidor. Respuesta cruda: ' + text);
+          console.error('Respuesta cruda del backend:', text);
+          return;
+        }
+        // Mapea los datos reales recibidos del backend
+        const mapped = (Array.isArray(data) ? data : []).map((item, idx) => {
+          if (item.type === 'DNI') {
+            return {
+              id: item.id || idx,
+              type: 'DNI',
+              query: item.query,
+              result: item.result,
+              time: item.timestamp ? new Date(item.timestamp).toLocaleString('es-PE', { hour12: false }) : '',
+              sexo: item.sexo || '',
+              fecha_nacimiento: item.fecha_nacimiento || '',
+              status: 'success',
+            };
+          } else if (item.type === 'RUC') {
+            return {
+              id: item.id || idx,
+              type: 'RUC',
+              query: item.query,
+              result: item.result,
+              estado: item.estado || '',
+              condicion: item.condicion || '',
+              time: item.timestamp ? new Date(item.timestamp).toLocaleString('es-PE', { hour12: false }) : '',
+              status: 'success',
+            };
+          } else {
+            return {
+              id: item.id || idx,
+              type: item.type || '',
+              query: item.query || '',
+              result: item.result || '',
+              time: item.timestamp ? new Date(item.timestamp).toLocaleString('es-PE', { hour12: false }) : '',
+              status: 'success',
+            };
+          }
+        });
+        setRecentSearches(mapped);
+      } catch (e: any) {
+        setError(e.message || 'Error desconocido');
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (user?.id) fetchRecentSearches();
+  }, []);
 
   // Métricas principales de consultas realizadas
+  // Calcula métricas reales según recentSearches
+  const rucCount = recentSearches.filter(s => s.type === 'RUC').length;
+  const dniCount = recentSearches.filter(s => s.type === 'DNI').length;
+  const today = new Date().toLocaleDateString();
+  const todayCount = recentSearches.filter(s => {
+    if (!s.time) return false;
+    const d = new Date(s.time);
+    return !isNaN(d.getTime()) && d.toLocaleDateString() === today;
+  }).length;
   const stats = [
     {
       title: 'Consultas RUC Realizadas',
-      value: 47,
+      value: rucCount,
       icon: Building,
       color: 'bg-blue-500',
-      trend: '+12 esta semana'
+      trend: ''
     },
     {
       title: 'Consultas DNI Realizadas',
-      value: 89,
+      value: dniCount,
       icon: User,
       color: 'bg-green-500',
-      trend: '+23 esta semana'
+      trend: ''
     },
     {
       title: 'Total Consultas',
-      value: 136,
+      value: rucCount + dniCount,
       icon: Search,
       color: 'bg-purple-500',
-      trend: '+35 esta semana'
-    },
-    {
-      title: 'Consultas Hoy',
-      value: 8,
-      icon: Activity,
-      color: 'bg-orange-500',
-      trend: 'Día actual'
+      trend: ''
     }
   ];
-
-  // Consultas recientes simuladas (DNI/RUC)
-  const recentSearches = [
-    {
-      id: '1',
-      type: 'RUC',
-      query: '20123456789',
-      result: 'CONSTRUCTORA MUNICIPAL SAC',
-      time: 'Hace 15 minutos',
-      status: 'success'
-    },
-    {
-      id: '2',
-      type: 'DNI',
-      query: '12345678',
-      result: 'JUAN CARLOS PEREZ GARCIA',
-      time: 'Hace 1 hora',
-      status: 'success'
-    },
-    {
-      id: '3',
-      type: 'RUC',
-      query: '20987654321',
-      result: 'SERVICIOS GENERALES LIMA EIRL',
-      time: 'Hace 2 horas',
-      status: 'success'
-    },
-    {
-      id: '4',
-      type: 'DNI',
-      query: '87654321',
-      result: 'MARIA ELENA RODRIGUEZ TORRES',
-      time: 'Hace 3 horas',
-      status: 'success'
-    }
-  ];
-
 
   return (
+    // <>
+    //   <JoyrideComponent
+    //     steps={steps}
+    //     continuous
+    //     showSkipButton
+    //     showProgress
+    //     run={runTutorial}
+    //     styles={{ options: { zIndex: 9999, primaryColor: '#c00202c0' } }}
+    //     callback={(data: CallBackProps) => {
+    //       const finishedStatuses = [STATUS.FINISHED, STATUS.SKIPPED];
+    //       if (finishedStatuses.includes(data.status as typeof finishedStatuses[number])) {
+    //         setRunTutorial(false);
+    //       }
+    //     }}
+    //   />
+
     <div className="space-y-10">
-      {/*
-        Header de bienvenida personalizado para el trabajador.
-        Muestra el nombre y una breve descripción.
-      */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-1 tracking-tight">
           Bienvenido, <span className="text-[#C01702]">{user ? `${user.nombres} ${user.apellidos}` : ''}</span>
@@ -111,15 +203,16 @@ export function TrabajadorDashboard() {
           Vista general de tus operaciones realizadas.
         </p>
         <div className="h-1 w-16 bg-[#C01702] rounded mt-3" />
+        {/* <button
+          onClick={() => setRunTutorial(true)}
+          className="text-sm font-medium text-[#C01702] underline hover:text-red-700 mt-2"
+          >
+          Ver tutorial
+        </button> */}
       </div>
 
-      {/*
-        Stats Grid: Métricas rápidas de consultas realizadas.
-        - Cada bloque muestra el total, tendencia y un ícono representativo.
-        - Accesible y responsivo.
-      */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        {stats.map((stat, index) => {
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {stats.slice(0, 3).map((stat, index) => {
           const Icon = stat.icon;
           return (
             <div
@@ -161,14 +254,42 @@ export function TrabajadorDashboard() {
             <span className="text-[#C01702]">Consultas Recientes</span>
           </h2>
           <div className="space-y-4 max-h-96 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-[#C01702]/60 scrollbar-track-gray-200 dark:scrollbar-track-gray-800">
-            {recentSearches.map((search) => (
+            {/* {recentSearches.map((search) => (
               <div key={search.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800">
                 <div className="rounded-full p-2 flex items-center justify-center bg-[#F6E7E4] dark:bg-[#2A1A18] border border-[#C01702]">
                   {search.type === 'RUC' ? (
                     <Building className="h-4 w-4 text-[#C01702]" aria-hidden="true" />
-                  ) : (
+                  ) : ( */}
+                        {loading ? (
+              <div className="text-center text-gray-500 dark:text-gray-400 py-8">Cargando consultas recientes...</div>
+            ) : error ? (
+              <div className="text-center text-red-500 py-8">{error}</div>
+            ) : recentSearches.length === 0 ? (
+              <div className="text-center text-gray-400 py-8">No hay consultas recientes.</div>
+            ) : (
+              recentSearches.map((search) => (
+                <div key={search.id} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-800">
+                  <div className="rounded-full p-2 flex items-center justify-center bg-[#F6E7E4] dark:bg-[#2A1A18] border border-[#C01702]">
                     <User className="h-4 w-4 text-[#C01702]" aria-hidden="true" />
-                  )}
+                              </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border border-[#C01702] text-[#C01702] bg-white dark:bg-gray-900">{search.type}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                        {search.query}
+                      </span>
+                    </div>
+                    <p className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                      {search.result}
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      {search.time}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+{/*                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -185,19 +306,11 @@ export function TrabajadorDashboard() {
                   </p>
                 </div>
               </div>
-            ))}
+            ))} */}
           </div>
         </div>
-
-        {/*
-          Resumen de Actividad:
-          - Visualiza proporción de consultas RUC, DNI y tasa de éxito.
-          - Cada bloque es accesible, con contraste y título descriptivo.
-          - Porcentaje visual, leyenda y colores institucionales.
-        */}
-        
       </div>
-
     </div>
+    // </>
   );
 }

@@ -16,6 +16,16 @@ import { AuditLogs } from './components/Admin/AuditLogs';
 import { RucSearch } from './components/Search/RucSearch';
 import { DniSearch } from './components/Search/DniSearch';
 import { ToastContainer } from './components/Toast/ToastContainer';
+import { useEffect, useState } from 'react';
+import NetworkNotification from './components/NetworkNotification';
+import { detectarDevtools } from './utils/devtoolsDetector';
+import CopyBlocker from './components/CopyBlocker';
+import DevtoolsWarning from './components/DevtoolsWarning';
+import { useBackendStatus } from './hooks/useBackendStatus';
+import MaintenanceModal from './components/MaintenanceModal';
+import { useSessionValidation } from './hooks/useSessionValidation';
+import MultipleSessionModal from './components/MultipleSessionModal';
+import SessionValidator from './components/SessionValidator';
 
 /**
  * Ruta protegida que requiere autenticación.
@@ -95,20 +105,66 @@ function AppRoutes() {
   );
 }
 
-/**
- * Componente raíz de la aplicación.
- * Envuelve la app con los providers globales y el router.
- */
 function App() {
+  const [devtoolsDetected, setDevtoolsDetected] = useState(false);
+  const isBackendOnline = useBackendStatus();
+
   return (
     <ToastProvider>
       <AuthProvider>
         <Router>
-          <AppRoutes />
+          <SessionValidator />
+          {/* {typeof isBackendOnline !== 'undefined' && (
+            <div className="fixed bottom-4 left-4 bg-white px-3 py-2 shadow rounded text-sm z-[9999]">
+              <strong>Backend:</strong> {isBackendOnline ? 'Online 🟢' : 'Offline 🔴'}
+            </div>
+          )} */}
+          {isBackendOnline === false && <MaintenanceModal />}
+          <AppWithAuth devtoolsDetected={devtoolsDetected} setDevtoolsDetected={setDevtoolsDetected} />
+          <CopyBlocker />
           <ToastContainer />
+          <NetworkNotification />
         </Router>
       </AuthProvider>
     </ToastProvider>
+  );
+  
+}
+
+interface AppWithAuthProps {
+  devtoolsDetected: boolean;
+  setDevtoolsDetected: (value: boolean) => void;
+}
+
+function AppWithAuth({ devtoolsDetected, setDevtoolsDetected }: AppWithAuthProps) {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    detectarDevtools(() => {
+      setDevtoolsDetected(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setDevtoolsDetected(false);
+    }
+  }, [user]);
+  return (
+    <>
+      {devtoolsDetected && !user && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 text-white z-[9999] flex items-center justify-center p-6">
+          <div className="text-center">
+            <h2 className="text-xl font-bold mb-2">⚠️ Herramientas de inspección detectadas</h2>
+            <p>No puedes interactuar con el sistema.</p>
+            <p className="mt-4 text-sm">Este acceso está monitoreado.</p>
+          </div>
+        </div>
+      )}
+
+      <AppRoutes />
+      {devtoolsDetected && user && <DevtoolsWarning />}
+    </>
   );
 }
 

@@ -6,8 +6,9 @@ import bcrypt from 'bcrypt';
 import PasswordValidator from 'password-validator';
 import { sendEmail } from './utils/mailer.js';
 import { recordFailedAttempt, markWarned, resetAttempts } from './utils/loginAttempts.js';
-import schema from './utils/passwordPolicy.js'; // esquema correcto
+import schema from './utils/passwordPolicy.js';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 
 dotenv.config();
 const app = express();
@@ -16,12 +17,33 @@ app.use(cors());
 app.use(express.json());
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+// MODIFICACION 18/07/2025 | CORRECCIÓN DE DUPLICIDAD userId/userIdSource | INICIO
+app.locals.pool = pool;
+// MODIFICACION 18/07/2025 | CORRECCIÓN DE DUPLICIDAD userId/userIdSource | FIN
+
+function authMiddleware(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth) return next();
+
+  const token = auth.split(' ')[1];
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = { id: payload.id, email: payload.email };
+  } catch (err) {
+    console.warn('[AuthMiddleware] Token inválido');
+  }
+  next();
+}
+
 //Modificacion - Implementacion de API Factiliza 14/07/2025 | INICIO
 // Importar router de consulta DNI y RUC y montar endpoints después de inicializar app
 import { router as dniApiRouter } from './api/dniApi.js';
+import { router as auditLogsApiRouter } from './api/auditLogsApi.js';
 import { router as rucApiRouter } from './api/rucApi.js';
+app.use(authMiddleware);
 app.use('/api/dni', dniApiRouter);
 app.use('/api/ruc', rucApiRouter);
+app.use('/api/audit-logs', auditLogsApiRouter);
 //Modificacion - Implementacion de API Factiliza 14/07/2025 | FIN
 
 // Routes de estado de usuario
@@ -33,13 +55,16 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 app.post('/login', async (req, res) => {
   const { emailOrDni, password } = req.body;
+  //const sessionToken = uuidv4();
+  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip || '';
+  const userKey = emailOrDni.toLowerCase();
+  const MAX_ATTEMPTS = 3;
+
   if (!emailOrDni || !password) {
     return res.status(400).json({ error: 'Faltan credenciales' });
   }
 
-  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip || '';
-  const userKey = emailOrDni.toLowerCase();
-  const MAX_ATTEMPTS = 3;
+  //await db.usuario.update({ where: { id: user.id }, data: { sessionToken } });
 
   try {
     const { rows } = await pool.query(`
@@ -84,18 +109,19 @@ app.post('/login', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Cuenta suspendida' });
     }
 
-    await pool.query('UPDATE users SET ultimo_acceso = NOW() WHERE id = $1', [user.id]);
+    const sessionToken = uuidv4();
+    await pool.query('UPDATE users SET session_token = $1, ultimo_acceso = NOW() WHERE id = $2', [sessionToken, user.id]);
+    //await pool.query('UPDATE users SET ultimo_acceso = NOW() WHERE id = $1', [user.id]);
 
     const { password: _, ...userData } = user;
+    userData.id = user.id;
 
     // Mapear rol para frontend
     userData.rol = user.rol === 'usuario' ? 'trabajador' : 'administrador';
-
     await pool.query(`
       INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
       VALUES ($1, 'login', 'autenticacion', 'Inicio de sesión exitoso', $2, 'exitoso', null)
     `, [user.email || user.dni, ip]);
-
     resetAttempts(userKey);
     const token = jwt.sign(
       { id: user.id, email: user.email, rol: userData.rol },
@@ -103,8 +129,8 @@ app.post('/login', async (req, res) => {
       { expiresIn: '1h' }
     );
 
-    return res.json({ success: true, user: userData, token });
-
+    //return res.json({ success: true, user: userData, token });
+    return res.json({ success: true, user: userData, token, sessionToken });
   } catch (err) {
     console.error('Error en /login:', err);
     return res.status(500).json({ error: 'Error en el servidor' });
@@ -450,6 +476,31 @@ async function sendPasswordChangeEmail(user) {
   await sendEmail({ to: user.email, subject: 'Contraseña actualizada', html });
 }
 
+// MODIFICACION 18/07/2025 | CAPTURA DE OPERACIONES POR PARTE DEL USUARIO | INICIO
+// Endpoint para registrar cierre de sesión de usuario
+app.post('/logout', async (req, res) => {
+  // MODIFICACION 18/07/2025 | CAPTURA DE OPERACIONES POR PARTE DEL USUARIO | INICIO
+  const { usuario } = req.body;
+  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || req.ip || '';
+  if (!usuario) {
+    return res.status(400).json({ error: 'Usuario no especificado' });
+  }
+  try {
+    await pool.query(
+      `INSERT INTO audit_logs (usuario, accion, modulo, descripcion, ip, resultado, detalles)
+       VALUES ($1, 'logout', 'autenticacion', 'Cierre de sesión', $2, 'exitoso', null)`,
+      [usuario, ip]
+    );
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Error registrando logout en audit_logs:', err);
+    return res.status(500).json({ error: 'Error registrando logout' });
+  }
+
+});
+
+  // MODIFICACION 18/07/2025 | CAPTURA DE OPERACIONES POR PARTE DEL USUARIO | FIN
+
 // Endpoint para eliminar un usuario físicamente
 app.delete('/users/:id', async (req, res) => {
   const { id } = req.params;
@@ -561,6 +612,25 @@ app.get('/areas', async (req, res) => {
     res.status(500).json({ error: 'Error al obtener áreas' });
   }
 });
+
+//OBTENER USUARIO AL EXPORTAR PDF | 21/07/2025 | INICIO
+
+// Endpoint para obtener un usuario por id
+app.get('/users/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query('SELECT id, nombres, apellidos, email FROM users WHERE id = $1', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al obtener usuario' });
+  }
+});
+
+//OBTENER USUARIO AL EXPORTAR PDF | 21/07/2025 | FIN
+
 
 // Endpoint para limpiar logs de auditoría (solo admin)
 app.post('/audit-logs/clear', async (req, res) => {
@@ -780,3 +850,33 @@ app.get('/estado', async (req, res) => {
 app.listen(port, () =>
   console.log(`Servidor escuchando en http://localhost:${port}`)
 );
+
+// backend/index.js o index.ts
+app.get('/status', (req, res) => {
+  res.status(200).send('OK');
+});
+
+app.post('/validate-session', async (req, res) => {
+  const { userId, sessionToken } = req.body;
+
+  try {
+    const { rows } = await pool.query(
+      'SELECT session_token FROM users WHERE id = $1',
+      [userId]
+    );
+
+    const user = rows[0];
+
+    if (!user || user.session_token !== sessionToken) {
+      return res.status(401).json({ valid: false });
+    }
+
+    return res.json({ valid: true });
+  } catch (err) {
+    console.error('Error en /validate-session:', err);
+    res.status(500).json({ error: 'Error en el servidor' });
+  }
+  
+  console.log('Token del usuario en DB:', user.session_token);
+  console.log('Token recibido en body:', sessionToken);
+});

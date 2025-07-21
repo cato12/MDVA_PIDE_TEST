@@ -591,7 +591,7 @@ export function RucSearch() {
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-4 mt-4">
+              {/* <div className="flex justify-end gap-4 mt-4">
                 <button
                   className="bg-[#C01702] hover:bg-[#a01301] text-white px-6 py-2 rounded-lg font-semibold shadow"
                   onClick={async () => {
@@ -750,7 +750,229 @@ export function RucSearch() {
                   }}
                 >
                   Exportar PDF
+                </button> */}
+      <div className="flex justify-end gap-4 mt-4">
+                {/* MODIFICACION 18/07/2025 | AUDITORIA EXPORTACION PDF RUC | INICIO */}
+                <button
+                  className="bg-[#C01702] hover:bg-[#a01301] text-white px-6 py-2 rounded-lg font-semibold shadow"
+                  onClick={async () => {
+                    if (!empresaData) return;
+                    try {
+                      // Validar RUC antes de exportar
+                      if (!empresaData.ruc || typeof empresaData.ruc !== 'string' || !/^\d{11}$/.test(empresaData.ruc)) {
+                        addToast('RUC inválido. No se puede exportar.', 'error');
+                        return;
+                      }
+                      // Llamar al endpoint solo para registrar en auditoría
+                      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+                      const userId = localStorage.getItem('mdva_user_id');
+                      const userEmail = (() => {
+                      try {
+                        const userObj = JSON.parse(localStorage.getItem('municipal_user') || '{}');
+                        return userObj.email || '';
+                      } catch { return ''; }
+                      })();
+                      const auditRes = await fetch(`${API_URL}/api/ruc/${empresaData.ruc}/exportar`, {
+                        method: 'POST',
+                        headers: {
+                          'x-user-id': userId || '',
+                          'x-user-email': userEmail || '',
+                          'Content-Type': 'application/json'
+                        }
+                      });
+                      if (!auditRes.ok) {
+                        addToast('No se pudo registrar la auditoría de exportación.', 'error');
+                        return;
+                      }
+                      // Generar el PDF usando los datos actuales de empresaData
+                      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'A4' });
+                      const usuarioSesion = JSON.parse(localStorage.getItem('usuarioSesion') || '{}');
+                      const fechaHora = new Date().toLocaleString('es-PE');
+                      const img = new window.Image();
+                      img.src = '/imagenes/logo_mdva_rojo.png';
+                      img.onload = () => {
+                      doc.addImage(img, 'PNG', 30, 24, 60, 60);
+                      doc.setFont('helvetica', 'bold');
+                      doc.setFontSize(22);
+                      doc.setTextColor(192, 23, 2);
+                      doc.text('Detalle de Empresa', 110, 50);
+                      doc.setFont('helvetica', 'normal');
+                      doc.setFontSize(12);
+                      doc.setTextColor(80, 80, 80);
+                      let generadoPor = '';
+                      if (usuarioSesion && (usuarioSesion.nombres || usuarioSesion.apellidos || usuarioSesion.username || usuarioSesion.email)) {
+                        const nombre = [usuarioSesion.nombres, usuarioSesion.apellidos].filter(Boolean).join(' ').trim();
+                        let userOrMail = '';
+                        if (usuarioSesion.username && usuarioSesion.username !== 'undefined') {
+                          userOrMail = `(${usuarioSesion.username})`;
+                        } else if (usuarioSesion.email && usuarioSesion.email !== 'undefined') {
+                          userOrMail = `(${usuarioSesion.email})`;
+                        }
+                        generadoPor = `Generado por: ${[nombre, userOrMail].filter(Boolean).join(' ').trim()}`;
+                      } else {
+                        // Si no hay datos en localStorage, consultar al backend por el id
+                        const userId = localStorage.getItem('mdva_user_id');
+                        generadoPor = 'Generado por: -';
+                        if (userId) {
+                          const xhr = new XMLHttpRequest();
+                          xhr.open('GET', `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${userId}`, false); // false = síncrono
+                          xhr.send(null);
+                          if (xhr.status === 200) {
+                            try {
+                              const user = JSON.parse(xhr.responseText);
+                              if (user.nombres || user.apellidos || user.email) {
+                                const nombre = [user.nombres, user.apellidos].filter(Boolean).join(' ').trim();
+                                let userOrMail = user.email ? `(${user.email})` : '';
+                                generadoPor = `Generado por: ${[nombre, userOrMail].filter(Boolean).join(' ').trim()}`;
+                              }
+                            } catch {}
+                          }
+                        }
+                      }
+                      doc.text(generadoPor, 110, 70);
+                      doc.setFontSize(11);
+                      doc.setTextColor(120, 120, 120);
+                      doc.text(`Fecha y hora: ${fechaHora}`, 110, 90);
+
+                      // Tabla de datos generales
+                      const datosGenerales = [
+                        ['RUC', empresaData.ruc],
+                        empresaData.razonSocial ? ['Razón Social', empresaData.razonSocial] : null,
+                        empresaData.nombreComercial ? ['Nombre Comercial', empresaData.nombreComercial] : null,
+                        empresaData.estado ? ['Estado', empresaData.estado] : null,
+                        empresaData.condicion ? ['Condición', empresaData.condicion] : null,
+                        empresaData.tipoContribuyente ? ['Tipo Contribuyente', empresaData.tipoContribuyente] : null,
+                        empresaData.actividadEconomica ? ['Actividad Económica', empresaData.actividadEconomica] : null,
+                        empresaData.fechaInscripcion ? ['Fecha Inscripción', empresaData.fechaInscripcion] : null,
+                        empresaData.fechaInicioActividades ? ['Inicio Actividades', empresaData.fechaInicioActividades] : null,
+                        empresaData.sistemaEmision ? ['Sistema Emisión', empresaData.sistemaEmision] : null,
+                        empresaData.sistemaContabilidad ? ['Sistema Contabilidad', empresaData.sistemaContabilidad] : null,
+                        empresaData.representanteLegal && empresaData.representanteLegal.nombre ? ['Representante Legal', `${empresaData.representanteLegal.nombre} (${empresaData.representanteLegal.tipoDocumento} ${empresaData.representanteLegal.numeroDocumento})`] : null,
+                      ].filter((row): row is string[] => Array.isArray(row));
+                      autoTable(doc, {
+                        startY: 110,
+                        margin: { left: 30, right: 30 },
+                        head: [['Campo', 'Valor']],
+                        body: datosGenerales,
+                        theme: 'grid',
+                        headStyles: { fillColor: [192, 23, 2], halign: 'center', fontSize: 11 },
+                        styles: { fontSize: 10, cellPadding: 4 },
+                        alternateRowStyles: { fillColor: [245, 245, 245] },
+                        columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 350 } },
+                        tableWidth: 'wrap',
+                      });
+                      let lastY = (doc as any).lastAutoTable?.finalY || 180;
+
+                      // Tabla de dirección
+                      if (empresaData.direccion && (empresaData.direccion.direccionCompleta || empresaData.direccion.direccion)) {
+                        const direccion = [
+                          ['Dirección', empresaData.direccion.direccionCompleta || empresaData.direccion.direccion],
+                          empresaData.direccion.departamento ? ['Departamento', empresaData.direccion.departamento] : null,
+                          empresaData.direccion.provincia ? ['Provincia', empresaData.direccion.provincia] : null,
+                          empresaData.direccion.distrito ? ['Distrito', empresaData.direccion.distrito] : null,
+                          empresaData.direccion.ubigeo ? ['Ubigeo', empresaData.direccion.ubigeo] : null,
+                        ].filter((row): row is string[] => Array.isArray(row));
+                        autoTable(doc, {
+                          startY: lastY + 16,
+                          margin: { left: 30, right: 30 },
+                          head: [['Dirección', 'Valor']],
+                          body: direccion,
+                          theme: 'grid',
+                          headStyles: { fillColor: [192, 23, 2], halign: 'center', fontSize: 11 },
+                          styles: { fontSize: 10, cellPadding: 4 },
+                          alternateRowStyles: { fillColor: [245, 245, 245] },
+                          columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 350 } },
+                          tableWidth: 'wrap',
+                        });
+                        lastY = (doc as any).lastAutoTable?.finalY || lastY + 60;
+                      }
+
+                      // Actividades económicas
+                      if (empresaData.actividadesEconomicas && empresaData.actividadesEconomicas.length > 0) {
+                        const actividades = empresaData.actividadesEconomicas.map(act => [act.descripcion, act.principal ? 'Principal' : 'Secundaria']);
+                        autoTable(doc, {
+                          startY: lastY + 16,
+                          margin: { left: 30, right: 30 },
+                          head: [['Actividad', 'Tipo']],
+                          body: actividades,
+                          theme: 'grid',
+                          headStyles: { fillColor: [23, 100, 192], halign: 'center', fontSize: 11 },
+                          styles: { fontSize: 10, cellPadding: 4 },
+                          alternateRowStyles: { fillColor: [245, 245, 245] },
+                          columnStyles: { 0: { cellWidth: 300 }, 1: { cellWidth: 100 } },
+                          tableWidth: 'wrap',
+                        });
+                        lastY = (doc as any).lastAutoTable?.finalY || lastY + 60;
+                      }
+
+                      // Comprobantes autorizados
+                      if (empresaData.comprobantes && empresaData.comprobantes.length > 0) {
+                        const comprobantes = empresaData.comprobantes.map(c => [c.descripcion]);
+                        autoTable(doc, {
+                          startY: lastY + 16,
+                          margin: { left: 30, right: 30 },
+                          head: [['Comprobantes Autorizados']],
+                          body: comprobantes,
+                          theme: 'grid',
+                          headStyles: { fillColor: [23, 192, 80], halign: 'center', fontSize: 11 },
+                          styles: { fontSize: 10, cellPadding: 4 },
+                          alternateRowStyles: { fillColor: [245, 245, 245] },
+                          columnStyles: { 0: { cellWidth: 400 } },
+                          tableWidth: 'wrap',
+                        });
+                        lastY = (doc as any).lastAutoTable?.finalY || lastY + 60;
+                      }
+
+                      // Padrones
+                      if (empresaData.padrones && empresaData.padrones.length > 0) {
+                        const padrones = empresaData.padrones.map(p => [p.descripcion, p.desde, p.hasta || '-']);
+                        autoTable(doc, {
+                          startY: lastY + 16,
+                          margin: { left: 30, right: 30 },
+                          head: [['Padrón', 'Desde', 'Hasta']],
+                          body: padrones,
+                          theme: 'grid',
+                          headStyles: { fillColor: [192, 100, 23], halign: 'center', fontSize: 11 },
+                          styles: { fontSize: 10, cellPadding: 4 },
+                          alternateRowStyles: { fillColor: [245, 245, 245] },
+                          columnStyles: { 0: { cellWidth: 250 }, 1: { cellWidth: 80 }, 2: { cellWidth: 80 } },
+                          tableWidth: 'wrap',
+                        });
+                        lastY = (doc as any).lastAutoTable?.finalY || lastY + 60;
+                      }
+
+                      // Pie de página y paginación
+                      const pageCount = doc.getNumberOfPages();
+                      const pageWidth = doc.internal.pageSize.getWidth();
+                      const pageHeight = doc.internal.pageSize.getHeight();
+                      for (let i = 1; i <= pageCount; i++) {
+                        doc.setPage(i);
+                        doc.setFontSize(9);
+                        doc.setTextColor(150);
+                        doc.text('Municipalidad Distrital De Vista Alegre - Sistema MDVA', pageWidth / 2, pageHeight - 20, { align: 'center' });
+                        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 40, pageHeight - 20, { align: 'right' });
+                      }
+                      doc.save(`empresa_${empresaData.ruc}.pdf`);
+                    };
+                    img.onerror = () => {
+                      // Si falla la carga del logo, igual generar el PDF sin logo
+                      // (copiar la lógica de renderPDF si se usa en otro lado)
+                      // Aquí se puede llamar directamente a la función de renderizado si existe
+                    };
+                    setTimeout(() => {
+                      if (!img.complete) {
+                        // Fallback si la imagen no carga en 2s
+                        // (copiar la lógica de renderPDF si se usa en otro lado)
+                      }
+                    }, 2000);
+                    } catch (err) {
+                      addToast('Error al exportar PDF. Intente nuevamente.', 'error');
+                    }
+                  }}
+                >
+                  Exportar PDF
                 </button>
+                {/* MODIFICACION 18/07/2025 | AUDITORIA EXPORTACION PDF RUC | FIN */}          
               </div>
             </div>
           </div>

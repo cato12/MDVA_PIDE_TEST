@@ -18,6 +18,7 @@ type LoginStatus = 'success' | 'suspendido' | 'no_encontrado' | 'contraseña' | 
 
 type AuthContextType = {
   user: User | null;
+  sessionToken: string | null;
   login: (emailOrDni: string, password: string) => Promise<LoginStatus>;
   logout: () => void;
   isLoading: boolean;
@@ -29,11 +30,16 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('municipal_user');
+    const storedSessionToken = localStorage.getItem('sessionToken');
     if (savedUser) {
       setUser(JSON.parse(savedUser));
+    }
+    if (storedSessionToken) {
+      setSessionToken(storedSessionToken);
     }
     setIsLoading(false);
   }, []);
@@ -64,10 +70,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.token) {
           localStorage.setItem('token', data.token);
         }
+
+        if (data.sessionToken) {
+          localStorage.setItem('sessionToken', data.sessionToken);
+          setSessionToken(data.sessionToken); // setea el estado
+        }
+
         setUser(user);
+        localStorage.setItem('mdva_user_id', user.id);
         localStorage.setItem('municipal_user', JSON.stringify(user));
         const expiry = Date.now() + 15 * 60 * 1000;
         localStorage.setItem('mdva_session_expiry', expiry.toString());
+        sessionStorage.removeItem('devtools_detected');
         setIsLoading(false);
         return 'success';
       }
@@ -107,9 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Opcional: manejar error de red
       }
     }
-    //Modificacion Logs de Auditoria - Monitoreo del Sistema (04/07/2025) ------ FIN-----
-
-  setUser(null);
+    localStorage.removeItem('sessionToken');
+    setSessionToken(null);
+    setUser(null);
     localStorage.removeItem('municipal_user');
     localStorage.removeItem('mdva_session_expiry');
     localStorage.removeItem('token');
@@ -121,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isSessionActive = () => checkSessionActive();
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading, isSessionActive }}>
+    <AuthContext.Provider value={{ user, sessionToken, login, logout, isLoading, isSessionActive }}>
       {children}
     </AuthContext.Provider>
   );

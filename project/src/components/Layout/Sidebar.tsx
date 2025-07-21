@@ -66,9 +66,8 @@ const serviciosPorUsuarioId: Record<number, { path: string; label: string; icon:
     { path: '/dashboard', label: 'Panel Principal', icon: Home },
     { path: '/busqueda-dni', label: 'Búsqueda por DNI', icon: Search },
     { path: '/busqueda-ruc', label: 'Búsqueda por RUC', icon: Search }
-    
   ]
-  // ...agrega más usuarios y servicios según tu base de datos
+  
 };
 
 // LÓGICA PARA INICIO DE SESIÓN DINÁMICO - SERVICIOS POR USUARIO - 15/07/2025 | FIN

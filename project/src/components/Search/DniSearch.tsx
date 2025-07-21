@@ -14,7 +14,7 @@
  *
  * @module DniSearch
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { consultarDNI as consultarDNIapi } from '../../api/consumoApi';
 import {
   Search, User, Calendar, MapPin, FileText, AlertCircle, RefreshCw, Shield, Users
@@ -79,6 +79,23 @@ export function DniSearch() {
   const [showResultsModal, setShowResultsModal] = useState(false);
   const { addToast } = useToast();
 
+  const [capturaActiva, setCapturaActiva] = useState(false);
+  
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      const isCaptureKey =
+        key === 'printscreen' ||
+        ((e.ctrlKey || e.metaKey || e.metaKey) && e.shiftKey && ['s', '3', '4', '5'].includes(key));
+
+      if (isCaptureKey) {
+        setCapturaActiva(true);
+        setTimeout(() => setCapturaActiva(false), 8000); // oculta luego de 8s
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   /**
    * Valida si el DNI tiene 8 dígitos numéricos
@@ -192,7 +209,7 @@ export function DniSearch() {
    */
   const handleExportPDF = async () => {
     if (!personaData) return;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+/*     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const marginX = 48;
@@ -321,8 +338,196 @@ export function DniSearch() {
       const fecha = new Date().toISOString().split('T')[0];
       doc.save(`persona_${personaData.dni}_${fecha}.pdf`);
     };
-  };
+  }; */
+try {
+      // MODIFICACION 18/07/2025 | AUDITORIA EXPORTACION PDF DNI | INICIO
+      // Llamar al endpoint solo para registrar en auditoría
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      const userId = localStorage.getItem('mdva_user_id');
+      const userEmail = (() => {
+        try {
+          const userObj = JSON.parse(localStorage.getItem('municipal_user') || '{}');
+          return userObj.email || '';
+        } catch { return ''; }
+      })();
+      await fetch(`${API_URL}/api/dni/${personaData.dni}/exportar`, {
+        headers: {
+          'x-user-id': userId || '',
+          'x-user-email': userEmail || '',
+          'Content-Type': 'application/json'
+        }
+      });
+      
 
+      // Generar el PDF usando los datos actuales de personaData
+      const data = personaData;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const usuarioSesion = JSON.parse(localStorage.getItem('usuarioSesion') || '{}');
+      const fechaHora = new Date().toLocaleString('es-PE');
+      const renderPDF = (img: HTMLImageElement | undefined = undefined) => {
+        if (img) {
+          doc.addImage(img, 'PNG', 20, 18, 38, 38);
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(192, 23, 2);
+        doc.text('Detalle de Persona', 70, 38);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.setTextColor(80, 80, 80);
+        let generadoPor = '';
+        if (usuarioSesion && (usuarioSesion.nombres || usuarioSesion.apellidos || usuarioSesion.username || usuarioSesion.email)) {
+          const nombre = [usuarioSesion.nombres, usuarioSesion.apellidos].filter(Boolean).join(' ').trim();
+          let userOrMail = '';
+          if (usuarioSesion.username && usuarioSesion.username !== 'undefined') {
+            userOrMail = `(${usuarioSesion.username})`;
+          } else if (usuarioSesion.email && usuarioSesion.email !== 'undefined') {
+            userOrMail = `(${usuarioSesion.email})`;
+          }
+          generadoPor = `Generado por: ${[nombre, userOrMail].filter(Boolean).join(' ').trim()}`;
+        } else {
+          // Si no hay datos en localStorage, consultar al backend por el id
+          const userId = localStorage.getItem('mdva_user_id');
+          generadoPor = 'Generado por: -';
+          if (userId) {
+            // NOTA: Esto es síncrono, pero la función renderPDF es síncrona. Se recomienda que la llamada sea asíncrona antes de renderizar el PDF.
+            // Aquí solo se muestra cómo hacerlo, pero lo ideal es obtener el nombre antes de llamar a renderPDF.
+            // Se puede mejorar con una promesa o await fuera de renderPDF.
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/users/${userId}`, false); // false = síncrono
+            xhr.send(null);
+            if (xhr.status === 200) {
+              try {
+                const user = JSON.parse(xhr.responseText);
+                if (user.nombres || user.apellidos || user.email) {
+                  const nombre = [user.nombres, user.apellidos].filter(Boolean).join(' ').trim();
+                  let userOrMail = user.email ? `(${user.email})` : '';
+                  generadoPor = `Generado por: ${[nombre, userOrMail].filter(Boolean).join(' ').trim()}`;
+                }
+              } catch {}
+            }
+          }
+        }
+        doc.text(generadoPor, 70, 54);
+        doc.setFontSize(10);
+        doc.setTextColor(120, 120, 120);
+        doc.text(`Fecha y hora: ${fechaHora}`, 70, 68);
+        
+       
+        // Tabla de datos personales
+        const datosPersonales = [
+          ['DNI', data.dni],
+          ...(data.codigoVerificacion ? [['Código de verificación', data.codigoVerificacion]] : []),
+          ['Nombre completo', data.nombreCompleto || '-'],
+          ['Nombres', data.nombres || '-'],
+          ['Apellido paterno', data.apellidoPaterno || '-'],
+          ['Apellido materno', data.apellidoMaterno || '-'],
+          ['Sexo', data.sexo === 'M' ? 'Masculino' : data.sexo === 'F' ? 'Femenino' : '-'],
+          ['Estado civil', data.estadoCivil || '-'],
+          ['Nacimiento', data.fechaNacimiento ? new Date(data.fechaNacimiento).toLocaleDateString('es-PE') + (data.edad ? ` (${data.edad} años)` : '') : '-'],
+          ['Lugar de nacimiento', data.lugarNacimiento ? [data.lugarNacimiento.distrito, data.lugarNacimiento.provincia, data.lugarNacimiento.departamento].filter(Boolean).join(', ') : '-'],
+          ['Ubigeo', data.ubigeoNacimiento || '-'],
+        ];
+        autoTable(doc, {
+          startY: 90,
+          head: [['Campo', 'Valor']],
+          body: datosPersonales,
+          theme: 'grid',
+          headStyles: { fillColor: [192, 23, 2], halign: 'center' },
+          styles: { fontSize: 10, cellPadding: 4 },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+          columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 320 } }
+        });
+
+        // Tabla de domicilio
+        const domicilio = [
+          ['Dirección', data.direccion?.direccionCompleta || '-'],
+          ['Distrito', data.direccion?.distrito || '-'],
+          ['Provincia', data.direccion?.provincia || '-'],
+          ['Departamento', data.direccion?.departamento || '-'],
+        ];
+        let lastY = (doc as any).lastAutoTable?.finalY || 120;
+        autoTable(doc, {
+          startY: lastY + 16,
+          head: [['Domicilio', 'Valor']],
+          body: domicilio,
+          theme: 'grid',
+          headStyles: { fillColor: [192, 23, 2], halign: 'center' },
+          styles: { fontSize: 10, cellPadding: 4 },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+          columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 320 } }
+        });
+        lastY = (doc as any).lastAutoTable?.finalY || lastY + 60;
+
+        // Información electoral (si existe)
+        if (data.votacion) {
+          const votacion = [
+            ['Local', data.votacion.local || '-'],
+            ['Mesa', data.votacion.mesa || '-'],
+            ['Dirección', data.votacion.direccion || '-'],
+          ];
+          autoTable(doc, {
+            startY: lastY + 16,
+            head: [['Información Electoral', 'Valor']],
+            body: votacion,
+            theme: 'grid',
+            headStyles: { fillColor: [192, 23, 2], halign: 'center' },
+            styles: { fontSize: 10, cellPadding: 4 },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 320 } }
+          });
+          lastY = (doc as any).lastAutoTable?.finalY || lastY + 60;
+        }
+
+        // Restricciones (si existen)
+        if (data.restricciones && Array.isArray(data.restricciones) && data.restricciones.length > 0) {
+          const restricciones = data.restricciones.map((r: any) => [r.tipo, `${r.descripcion} (${r.vigente ? 'Vigente' : 'Sin restricciones'})`]);
+          autoTable(doc, {
+            startY: lastY + 16,
+            head: [['Restricción', 'Detalle']],
+            body: restricciones,
+            theme: 'grid',
+            headStyles: { fillColor: [192, 23, 2], halign: 'center' },
+            styles: { fontSize: 10, cellPadding: 4 },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            columnStyles: { 0: { cellWidth: 120 }, 1: { cellWidth: 320 } }
+          });
+          lastY = (doc as any).lastAutoTable?.finalY || lastY + 60;
+        }
+
+        // Pie de página y paginación
+        const pageCount = doc.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.setFontSize(9);
+          doc.setTextColor(150);
+          doc.text('Municipalidad Distrital De Vista Alegre - Sistema MDVA', pageWidth / 2, pageHeight - 20, { align: 'center' });
+          doc.text(`Página ${i} de ${pageCount}`, pageWidth - 40, pageHeight - 20, { align: 'right' });
+        }
+        const fecha = new Date().toISOString().split('T')[0];
+        doc.save(`persona_${data.dni}_${fecha}.pdf`);
+      };
+      // Cargar imagen y fallback si falla
+      const img = new window.Image();
+      img.src = '/imagenes/logo_mdva_rojo.png';
+      let imgLoaded = false;
+      img.onload = () => {
+        imgLoaded = true;
+        renderPDF(img);
+      };
+      img.onerror = () => {
+        if (!imgLoaded) renderPDF(undefined); // Fallback sin logo
+      };
+      setTimeout(() => {
+        if (!imgLoaded) renderPDF(undefined);
+      }, 2000);
+    } catch (err) {
+      addToast('Error al exportar PDF. Intente nuevamente.', 'error');
+    }
+  
+  };
 
   /**
    * Devuelve un badge visual para el sexo (M/F)
@@ -565,7 +770,12 @@ export function DniSearch() {
               className="fixed inset-0 flex items-center justify-center pointer-events-none"
               style={{ zIndex: 10000 }}
             >
-              <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-2xl border-2 border-gray-200 dark:border-gray-700 w-full max-w-3xl mx-auto animate-fade-in flex flex-col pointer-events-auto max-h-[90vh] overflow-y-auto">
+              <div className={`relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-2xl border-2 border-gray-200 dark:border-gray-700 w-full max-w-3xl mx-auto animate-fade-in flex flex-col pointer-events-auto max-h-[90vh] overflow-y-auto ${capturaActiva ? 'blur-md select-none pointer-events-none' : ''}`}>
+                {capturaActiva && (
+                  <div className="absolute inset-0 bg-black bg-opacity-70 z-50 flex items-center justify-center text-white text-lg font-bold rounded-2xl">
+                    🕵️‍♂️ Protección de datos activa. Visualización temporalmente bloqueada.
+                  </div>
+                )}
                 <button
                   className="absolute top-4 right-4 text-gray-400 hover:text-[#C01702] text-2xl font-bold focus:outline-none"
                   onClick={() => setPersonaData(null)}

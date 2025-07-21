@@ -11,4 +11,9 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'], // Excluye lucide-react del pre-bundling si es necesario
   },
+    server: {
+    proxy: {
+      '/api': 'http://localhost:4000'
+    }
+  }
 });

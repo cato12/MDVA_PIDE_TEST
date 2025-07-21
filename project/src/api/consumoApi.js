@@ -3,20 +3,31 @@
 export async function consultarRUC(ruc) {
   if (!ruc || typeof ruc !== 'string') throw new Error('RUC inválido');
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+  // MODIFICACION 18/07/2025 | ENVIO DE USUARIO EN CONSULTA RUC | INICIO
+  // Obtener userId y email de localStorage
+  const userId = localStorage.getItem('mdva_user_id');
+  let userEmail = '';
   try {
-    const res = await fetch(`${API_URL}/api/ruc/${ruc}`);
+    const userObj = JSON.parse(localStorage.getItem('municipal_user') || '{}');
+    userEmail = userObj.email || '';
+  } catch {}
+  try {
+    const res = await fetch(`${API_URL}/api/ruc/${ruc}` , {
+      headers: {
+        'x-user-id': userId || '',
+        'x-user-email': userEmail || ''
+      }
+    });
+    
     if (!res.ok) {
       const error = await res.json();
       throw new Error(error.error || 'Error consultando RUC');
     }
     const raw = await res.json();
-    // Debug: mostrar la respuesta cruda y el objeto data
     console.log('DEBUG RUC raw:', raw);
-    // Caso 1: respuesta normalizada directamente
     if (raw && (raw.ruc || raw.razonSocial)) {
       return raw;
     }
-    // Caso 2: respuesta con .data
     if (raw && raw.data && typeof raw.data === 'object' && raw.data !== null) {
       const d = raw.data;
       if (Object.keys(d).length > 0) {
