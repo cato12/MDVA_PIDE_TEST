@@ -856,10 +856,9 @@ app.get('/estado', async (req, res) => {
   }
 });
 
-// /users, /admin-stats, etc.
-app.listen(port, () =>
-  console.log(`Servidor escuchando en http://localhost:${port}`)
-);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Servidor escuchando en http://localhost:${port}`);
+});
 
 // backend/index.js o index.ts
 app.get('/status', (req, res) => {
