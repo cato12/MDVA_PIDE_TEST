@@ -13,7 +13,17 @@ import { v4 as uuidv4 } from 'uuid';
 dotenv.config();
 const app = express();
 const port = process.env.PORT || 4000;
-app.use(cors());
+
+app.get('/', (req, res) => {
+  res.send('API backend de MDVA en funcionamiento ✅');
+});
+
+const corsOptions = {
+  origin: 'https://pidemovdtest.netlify.app',
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
